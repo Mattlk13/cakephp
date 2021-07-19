@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) :  Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -14,10 +16,12 @@
  */
 namespace Cake\Log\Engine;
 
+use ArrayObject;
 use Cake\Core\InstanceConfigTrait;
-use Cake\Datasource\EntityInterface;
+use DateTimeImmutable;
 use JsonSerializable;
 use Psr\Log\AbstractLogger;
+use Serializable;
 
 /**
  * Base log engine class.
@@ -33,7 +37,8 @@ abstract class BaseLog extends AbstractLogger
      */
     protected $_defaultConfig = [
         'levels' => [],
-        'scopes' => []
+        'scopes' => [],
+        'dateFormat' => 'Y-m-d H:i:s',
     ];
 
     /**
@@ -63,7 +68,7 @@ abstract class BaseLog extends AbstractLogger
      *
      * @return array
      */
-    public function levels()
+    public function levels(): array
     {
         return $this->_config['levels'];
     }
@@ -71,7 +76,7 @@ abstract class BaseLog extends AbstractLogger
     /**
      * Get the scopes this logger is interested in.
      *
-     * @return array
+     * @return array|false
      */
     public function scopes()
     {
@@ -79,34 +84,94 @@ abstract class BaseLog extends AbstractLogger
     }
 
     /**
-     * Converts to string the provided data so it can be logged. The context
-     * can optionally be used by log engines to interpolate variables
+     * Formats the message to be logged.
+     *
+     * The context can optionally be used by log engines to interpolate variables
      * or add additional info to the logged message.
      *
-     * @param mixed $data The data to be converted to string and logged.
+     * @param string $message The message to be formatted.
      * @param array $context Additional logging information for the message.
      * @return string
      */
-    protected function _format($data, array $context = [])
+    protected function _format(string $message, array $context = []): string
     {
-        if (is_string($data)) {
-            return $data;
+        if (strpos($message, '{') === false && strpos($message, '}') === false) {
+            return $message;
         }
 
-        $isObject = is_object($data);
-
-        if ($isObject && $data instanceof EntityInterface) {
-            return json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        preg_match_all(
+            '/(?<!' . preg_quote('\\', '/') . ')\{([a-z0-9-_]+)\}/i',
+            $message,
+            $matches
+        );
+        if (empty($matches)) {
+            return $message;
         }
 
-        if ($isObject && method_exists($data, '__toString')) {
-            return (string)$data;
+        $placeholders = array_intersect($matches[1], array_keys($context));
+        $replacements = [];
+
+        foreach ($placeholders as $key) {
+            $value = $context[$key];
+
+            if (is_scalar($value)) {
+                $replacements['{' . $key . '}'] = (string)$value;
+                continue;
+            }
+
+            if (is_array($value)) {
+                $replacements['{' . $key . '}'] = json_encode($value, JSON_UNESCAPED_UNICODE);
+                continue;
+            }
+
+            if ($value instanceof JsonSerializable) {
+                $replacements['{' . $key . '}'] = json_encode($value, JSON_UNESCAPED_UNICODE);
+                continue;
+            }
+
+            if ($value instanceof ArrayObject) {
+                $replacements['{' . $key . '}'] = json_encode($value->getArrayCopy(), JSON_UNESCAPED_UNICODE);
+                continue;
+            }
+
+            if ($value instanceof Serializable) {
+                $replacements['{' . $key . '}'] = $value->serialize();
+                continue;
+            }
+
+            if (is_object($value)) {
+                if (method_exists($value, '__toString')) {
+                    $replacements['{' . $key . '}'] = (string)$value;
+                    continue;
+                }
+
+                if (method_exists($value, 'toArray')) {
+                    $replacements['{' . $key . '}'] = json_encode($value->toArray(), JSON_UNESCAPED_UNICODE);
+                    continue;
+                }
+
+                if (method_exists($value, '__debugInfo')) {
+                    $replacements['{' . $key . '}'] = json_encode($value->__debugInfo(), JSON_UNESCAPED_UNICODE);
+                    continue;
+                }
+            }
+
+            $replacements['{' . $key . '}'] = sprintf('[unhandled value of type %s]', getTypeName($value));
         }
 
-        if ($isObject && $data instanceof JsonSerializable) {
-            return json_encode($data, JSON_UNESCAPED_UNICODE);
-        }
+        /** @psalm-suppress InvalidArgument */
+        return str_replace(array_keys($replacements), $replacements, $message);
+    }
 
-        return print_r($data, true);
+    /**
+     * Returns date formatted according to given `dateFormat` option format.
+     *
+     * This function affects `FileLog` or` ConsoleLog` datetime information format.
+     *
+     * @return string
+     */
+    protected function _getFormattedDate(): string
+    {
+        return (new DateTimeImmutable())->format($this->_config['dateFormat']);
     }
 }

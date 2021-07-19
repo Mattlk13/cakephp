@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -14,12 +16,15 @@
  */
 namespace Cake\Test\TestCase\TestSuite;
 
-use Cake\Mailer\Email;
+use Cake\Mailer\Mailer;
+use Cake\Mailer\Message;
 use Cake\Mailer\TransportFactory;
+use Cake\TestSuite\Constraint\Email\MailSentFrom;
 use Cake\TestSuite\EmailTrait;
 use Cake\TestSuite\TestCase;
 use Cake\TestSuite\TestEmailTransport;
 use PHPUnit\Framework\AssertionFailedError;
+use PHPUnit\Framework\Constraint\LogicalNot;
 
 /**
  * Tests EmailTrait assertions
@@ -33,23 +38,23 @@ class EmailTraitTest extends TestCase
      *
      * @return void
      */
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
 
-        Email::drop('default');
-        Email::drop('alternate');
+        Mailer::drop('default');
+        Mailer::drop('alternate');
 
-        Email::setConfig('default', [
+        Mailer::setConfig('default', [
             'transport' => 'test_tools',
             'from' => 'default@example.com',
         ]);
-        Email::setConfig('alternate', [
+        Mailer::setConfig('alternate', [
             'transport' => 'test_tools',
             'from' => 'alternate@example.com',
         ]);
         TransportFactory::setConfig('test_tools', [
-            'className' => TestEmailTransport::class
+            'className' => TestEmailTransport::class,
         ]);
     }
 
@@ -58,12 +63,12 @@ class EmailTraitTest extends TestCase
      *
      * @return void
      */
-    public function tearDown()
+    public function tearDown(): void
     {
         parent::tearDown();
 
-        Email::drop('default');
-        Email::drop('alternate');
+        Mailer::drop('default');
+        Mailer::drop('alternate');
         TransportFactory::drop('test_tools');
     }
 
@@ -86,10 +91,17 @@ class EmailTraitTest extends TestCase
         $this->assertMailContains('text');
         $this->assertMailContains('html');
 
+        $this->assertMailSubjectContains('world');
+
+        $this->assertMailContainsAttachment('custom_name.php');
+        $this->assertMailContainsAttachment('custom_name.php', ['file' => CAKE . 'basics.php']);
+
         $this->assertMailSentWith('Hello world', 'subject');
         $this->assertMailSentWith('cc@example.com', 'cc');
         $this->assertMailSentWith('bcc@example.com', 'bcc');
         $this->assertMailSentWith('cc2@example.com', 'cc');
+        $this->assertMailSentWith('replyto@example.com', 'replyTo');
+        $this->assertMailSentWith('sender@example.com', 'sender');
     }
 
     /**
@@ -103,18 +115,25 @@ class EmailTraitTest extends TestCase
 
         $this->sendEmails();
 
-        $this->assertMailCount(2);
+        $this->assertMailCount(3);
 
         $this->assertMailSentFromAt(0, 'default@example.com');
         $this->assertMailSentFromAt(1, 'alternate@example.com');
 
+        // Confirm that "at 0" is really testing email 0, not all the emails
+        $this->assertThat('alternate@example.com', new LogicalNot(new MailSentFrom(0)));
+
         $this->assertMailSentToAt(0, 'to@example.com');
         $this->assertMailSentToAt(1, 'to2@example.com');
+        $this->assertMailSentToAt(2, 'to3@example.com');
 
         $this->assertMailContainsAt(0, 'text');
         $this->assertMailContainsAt(1, 'html');
 
+        $this->assertMailSubjectContainsAt(0, 'world');
+
         $this->assertMailSentWithAt(0, 'Hello world', 'subject');
+        $this->assertMailSentWithAt(0, 'replyto@example.com', 'replyTo');
     }
 
     /**
@@ -166,10 +185,10 @@ class EmailTraitTest extends TestCase
      */
     public function testAssertUsingRegExpCharacters()
     {
-        (new Email())
+        (new Mailer())
             ->setTo('to3@example.com')
             ->setCc('cc3@example.com')
-            ->send('email with regexp chars $/[]');
+            ->deliver('email with regexp chars $/[]');
 
         $this->assertMailContains('$/[]');
     }
@@ -205,12 +224,15 @@ class EmailTraitTest extends TestCase
             'assertMailSentFromAt' => ['assertMailSentFromAt', 'Failed asserting that \'missing@example.com\' sent email #1.', [1, 'missing@example.com']],
             'assertMailSentWith' => ['assertMailSentWith', 'Failed asserting that \'Missing\' is in an email `subject`.', ['Missing', 'subject']],
             'assertMailSentWithAt' => ['assertMailSentWithAt', 'Failed asserting that \'Missing\' is in email #1 `subject`.', [1, 'Missing', 'subject']],
-            'assertMailContains' => ['assertMailContains', 'Failed asserting that \'Missing\' is in an email.', ['Missing']],
-            'assertMailContainsHtml' => ['assertMailContainsHtml', 'Failed asserting that \'Missing\' is in the html message of an email.', ['Missing']],
-            'assertMailContainsText' => ['assertMailContainsText', 'Failed asserting that \'Missing\' is in the text message of an email.', ['Missing']],
-            'assertMailContainsAt' => ['assertMailContainsAt', 'Failed asserting that \'Missing\' is in email #1.', [1, 'Missing']],
-            'assertMailContainsHtmlAt' => ['assertMailContainsHtmlAt', 'Failed asserting that \'Missing\' is in the html message of email #1.', [1, 'Missing']],
-            'assertMailContainsTextAt' => ['assertMailContainsTextAt', 'Failed asserting that \'Missing\' is in the text message of email #1.', [1, 'Missing']],
+            'assertMailContains' => ['assertMailContains', 'Failed asserting that \'Missing\' is in an email' . PHP_EOL . 'was: .', ['Missing']],
+            'assertMailContainsAttachment' => ['assertMailContainsAttachment', 'Failed asserting that \'no_existing_file.php\' is an attachment of an email.', ['no_existing_file.php']],
+            'assertMailContainsHtml' => ['assertMailContainsHtml', 'Failed asserting that \'Missing\' is in the html message of an email' . PHP_EOL . 'was: .', ['Missing']],
+            'assertMailContainsText' => ['assertMailContainsText', 'Failed asserting that \'Missing\' is in the text message of an email' . PHP_EOL . 'was: .', ['Missing']],
+            'assertMailContainsAt' => ['assertMailContainsAt', 'Failed asserting that \'Missing\' is in email #1' . PHP_EOL . 'was: .', [1, 'Missing']],
+            'assertMailContainsHtmlAt' => ['assertMailContainsHtmlAt', 'Failed asserting that \'Missing\' is in the html message of email #1' . PHP_EOL . 'was: .', [1, 'Missing']],
+            'assertMailContainsTextAt' => ['assertMailContainsTextAt', 'Failed asserting that \'Missing\' is in the text message of email #1' . PHP_EOL . 'was: .', [1, 'Missing']],
+            'assertMailSubjectContains' => ['assertMailSubjectContains', 'Failed asserting that \'Missing\' is in an email subject' . PHP_EOL . 'was: .', ['Missing']],
+            'assertMailSubjectContainsAt' => ['assertMailSubjectContainsAt', 'Failed asserting that \'Missing\' is in an email subject #1' . PHP_EOL . 'was: .', [1, 'Missing']],
         ];
     }
 
@@ -221,19 +243,26 @@ class EmailTraitTest extends TestCase
      */
     private function sendEmails()
     {
-        (new Email())
+        (new Mailer())
+            ->setSender(['sender@example.com' => 'Sender'])
             ->setTo(['to@example.com' => 'Foo Bar'])
             ->addTo('alsoto@example.com')
+            ->setReplyTo(['replyto@example.com' => 'Reply to me'])
             ->setCc('cc@example.com')
             ->setBcc(['bcc@example.com' => 'Baz Qux'])
             ->setSubject('Hello world')
-            ->setEmailFormat(Email::MESSAGE_TEXT)
-            ->send('text');
+            ->setAttachments(['custom_name.php' => CAKE . 'basics.php'])
+            ->setEmailFormat(Message::MESSAGE_TEXT)
+            ->deliver('text');
 
-        (new Email('alternate'))
+        (new Mailer('alternate'))
             ->setTo('to2@example.com')
             ->setCc('cc2@example.com')
-            ->setEmailFormat(Email::MESSAGE_HTML)
-            ->send('html');
+            ->setEmailFormat(Message::MESSAGE_HTML)
+            ->deliver('html');
+
+        (new Mailer('alternate'))
+            ->setTo(['to3@example.com' => null])
+            ->deliver('html');
     }
 }

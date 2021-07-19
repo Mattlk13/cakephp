@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -17,53 +19,34 @@ namespace Cake\Test\TestCase\View\Form;
 use ArrayIterator;
 use ArrayObject;
 use Cake\Collection\Collection;
-use Cake\Http\ServerRequest;
 use Cake\ORM\Entity;
 use Cake\TestSuite\TestCase;
 use Cake\Validation\Validator;
 use Cake\View\Form\EntityContext;
+use TestApp\Model\Entity\Article;
 use TestApp\Model\Entity\ArticlesTag;
 use TestApp\Model\Entity\Tag;
-
-/**
- * Test stub.
- */
-class Article extends Entity
-{
-
-    /**
-     * Testing stub method.
-     *
-     * @return bool
-     */
-    public function isRequired()
-    {
-        return true;
-    }
-}
 
 /**
  * Entity context test case.
  */
 class EntityContextTest extends TestCase
 {
-
     /**
      * Fixtures to use.
      *
      * @var array
      */
-    public $fixtures = ['core.Articles', 'core.Comments', 'core.ArticlesTags', 'core.Tags'];
+    protected $fixtures = ['core.Articles', 'core.Comments', 'core.ArticlesTags', 'core.Tags'];
 
     /**
      * setup method.
      *
      * @return void
      */
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
-        $this->request = new ServerRequest();
     }
 
     /**
@@ -75,7 +58,7 @@ class EntityContextTest extends TestCase
     {
         $this->_setupTables();
 
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => new Article(),
             'table' => 'Articles',
             'validator' => 'create',
@@ -93,7 +76,7 @@ class EntityContextTest extends TestCase
     public function testEntity()
     {
         $row = new Article();
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
         ]);
         $this->assertSame($row, $context->entity());
@@ -107,10 +90,10 @@ class EntityContextTest extends TestCase
     public function testPrimaryKey()
     {
         $row = new Article();
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
         ]);
-        $this->assertEquals(['id'], $context->primaryKey());
+        $this->assertEquals(['id'], $context->getPrimaryKey());
     }
 
     /**
@@ -123,7 +106,7 @@ class EntityContextTest extends TestCase
         $this->_setupTables();
 
         $row = new Article();
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
         ]);
         $this->assertTrue($context->isPrimaryKey('id'));
@@ -146,15 +129,15 @@ class EntityContextTest extends TestCase
     public function testIsCreateSingle()
     {
         $row = new Article();
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
         ]);
         $this->assertTrue($context->isCreate());
 
-        $row->isNew(false);
+        $row->setNew(false);
         $this->assertFalse($context->isCreate());
 
-        $row->isNew(true);
+        $row->setNew(true);
         $this->assertTrue($context->isCreate());
     }
 
@@ -166,7 +149,7 @@ class EntityContextTest extends TestCase
      */
     public function testIsCreateCollection($collection)
     {
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $collection,
         ]);
         $this->assertTrue($context->isCreate());
@@ -174,28 +157,26 @@ class EntityContextTest extends TestCase
 
     /**
      * Test an invalid table scope throws an error.
-     *
      */
     public function testInvalidTable()
     {
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Unable to find table class for current entity');
         $row = new \stdClass();
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
         ]);
     }
 
     /**
      * Tests that passing a plain entity will give an error as it cannot be matched
-     *
      */
     public function testDefaultEntityError()
     {
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Unable to find table class for current entity');
-        $context = new EntityContext($this->request, [
-            'entity' => new Entity,
+        $context = new EntityContext([
+            'entity' => new Entity(),
         ]);
     }
 
@@ -208,7 +189,7 @@ class EntityContextTest extends TestCase
     {
         $entity = new Entity();
         $entity->setSource('Articles');
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $entity,
         ]);
         $expected = ['id', 'author_id', 'title', 'body', 'published'];
@@ -222,14 +203,14 @@ class EntityContextTest extends TestCase
      */
     public function testOperationsNoEntity()
     {
-        $context = new EntityContext($this->request, [
-            'table' => 'Articles'
+        $context = new EntityContext([
+            'table' => 'Articles',
         ]);
 
         $this->assertNull($context->val('title'));
-        $this->assertFalse($context->isRequired('title'));
+        $this->assertNull($context->isRequired('title'));
         $this->assertFalse($context->hasError('title'));
-        $this->assertEquals('string', $context->type('title'));
+        $this->assertSame('string', $context->type('title'));
         $this->assertEquals([], $context->error('title'));
 
         $attrs = $context->attributes('title');
@@ -246,11 +227,11 @@ class EntityContextTest extends TestCase
     {
         $row = new Article([
             'title' => 'Test entity',
-            'body' => 'Something new'
+            'body' => 'Something new',
         ]);
         $row->setError('title', ['Title is required.']);
 
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
         ]);
 
@@ -270,12 +251,12 @@ class EntityContextTest extends TestCase
      */
     public function testCollectionOperationsNoTableArg($collection)
     {
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $collection,
         ]);
 
         $result = $context->val('0.title');
-        $this->assertEquals('First post', $result);
+        $this->assertSame('First post', $result);
 
         $result = $context->error('1.body');
         $this->assertEquals(['Not long enough'], $result);
@@ -291,14 +272,14 @@ class EntityContextTest extends TestCase
         $one = new Article([
             'title' => 'First post',
             'body' => 'Stuff',
-            'user' => new Entity(['username' => 'mark'])
+            'user' => new Entity(['username' => 'mark']),
         ]);
         $one->setError('title', 'Required field');
 
         $two = new Article([
             'title' => 'Second post',
             'body' => 'Some text',
-            'user' => new Entity(['username' => 'jose'])
+            'user' => new Entity(['username' => 'jose']),
         ]);
         $two->setError('body', 'Not long enough');
 
@@ -318,22 +299,22 @@ class EntityContextTest extends TestCase
      */
     public function testValOnCollections($collection)
     {
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $collection,
             'table' => 'Articles',
         ]);
 
         $result = $context->val('0.title');
-        $this->assertEquals('First post', $result);
+        $this->assertSame('First post', $result);
 
         $result = $context->val('0.user.username');
-        $this->assertEquals('mark', $result);
+        $this->assertSame('mark', $result);
 
         $result = $context->val('1.title');
-        $this->assertEquals('Second post', $result);
+        $this->assertSame('Second post', $result);
 
         $result = $context->val('1.user.username');
-        $this->assertEquals('jose', $result);
+        $this->assertSame('jose', $result);
 
         $this->assertNull($context->val('nope'));
         $this->assertNull($context->val('99.title'));
@@ -348,22 +329,22 @@ class EntityContextTest extends TestCase
      */
     public function testValOnCollectionsWithRootName($collection)
     {
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $collection,
             'table' => 'Articles',
         ]);
 
         $result = $context->val('Articles.0.title');
-        $this->assertEquals('First post', $result);
+        $this->assertSame('First post', $result);
 
         $result = $context->val('Articles.0.user.username');
-        $this->assertEquals('mark', $result);
+        $this->assertSame('mark', $result);
 
         $result = $context->val('Articles.1.title');
-        $this->assertEquals('Second post', $result);
+        $this->assertSame('Second post', $result);
 
         $result = $context->val('Articles.1.user.username');
-        $this->assertEquals('jose', $result);
+        $this->assertSame('jose', $result);
 
         $this->assertNull($context->val('Articles.99.title'));
     }
@@ -376,7 +357,7 @@ class EntityContextTest extends TestCase
      */
     public function testErrorsOnCollections($collection)
     {
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $collection,
             'table' => 'Articles',
         ]);
@@ -402,19 +383,22 @@ class EntityContextTest extends TestCase
     public function testSchemaOnCollections($collection)
     {
         $this->_setupTables();
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $collection,
             'table' => 'Articles',
         ]);
 
-        $this->assertEquals('string', $context->type('0.title'));
-        $this->assertEquals('text', $context->type('1.body'));
-        $this->assertEquals('string', $context->type('0.user.username'));
-        $this->assertEquals('string', $context->type('1.user.username'));
-        $this->assertEquals('string', $context->type('99.title'));
+        $this->assertSame('string', $context->type('0.title'));
+        $this->assertSame('text', $context->type('1.body'));
+        $this->assertSame('string', $context->type('0.user.username'));
+        $this->assertSame('string', $context->type('1.user.username'));
+        $this->assertSame('string', $context->type('99.title'));
         $this->assertNull($context->type('0.nope'));
 
-        $expected = ['length' => 255, 'precision' => null];
+        $expected = [
+            'length' => 255, 'precision' => null,
+            'null' => null, 'default' => null, 'comment' => null,
+        ];
         $this->assertEquals($expected, $context->attributes('0.user.username'));
     }
 
@@ -428,22 +412,22 @@ class EntityContextTest extends TestCase
     {
         $this->_setupTables();
 
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $collection,
             'table' => 'Articles',
             'validator' => [
                 'Articles' => 'create',
                 'Users' => 'custom',
-            ]
+            ],
         ]);
-        $this->assertFalse($context->isRequired('nope'));
+        $this->assertNull($context->isRequired('nope'));
 
         $this->assertTrue($context->isRequired('0.title'));
         $this->assertTrue($context->isRequired('0.user.username'));
         $this->assertFalse($context->isRequired('1.body'));
 
         $this->assertTrue($context->isRequired('99.title'));
-        $this->assertFalse($context->isRequired('99.nope'));
+        $this->assertNull($context->isRequired('99.nope'));
     }
 
     /**
@@ -455,9 +439,9 @@ class EntityContextTest extends TestCase
     {
         $row = new Article([
             'title' => 'Test entity',
-            'body' => 'Something new'
+            'body' => 'Something new',
         ]);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
@@ -472,20 +456,40 @@ class EntityContextTest extends TestCase
     }
 
     /**
+     * Test reading invalid data.
+     *
+     * @return void
+     */
+    public function testValInvalid()
+    {
+        $row = new Article([
+            'title' => 'Valid title',
+        ]);
+        $row->setInvalidField('title', 'Invalid title');
+
+        $context = new EntityContext([
+            'entity' => $row,
+            'table' => 'Articles',
+        ]);
+        $result = $context->val('title');
+        $this->assertSame('Invalid title', $result);
+    }
+
+    /**
      * Test default values when entity is an array.
      *
      * @return void
      */
     public function testValDefaultArray()
     {
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => new Article([
-                'prop' => ['title' => 'foo']
+                'prop' => ['title' => 'foo'],
             ]),
             'table' => 'Articles',
         ]);
-        $this->assertEquals('foo', $context->val('prop.title', ['default' => 'bar']));
-        $this->assertEquals('bar', $context->val('prop.nope', ['default' => 'bar']));
+        $this->assertSame('foo', $context->val('prop.title', ['default' => 'bar']));
+        $this->assertSame('bar', $context->val('prop.nope', ['default' => 'bar']));
     }
 
     /**
@@ -504,9 +508,9 @@ class EntityContextTest extends TestCase
             'author' => new Entity([
                 'roles' => ['admin', 'publisher'],
                 'aliases' => new ArrayObject(['dave', 'david']),
-            ])
+            ]),
         ]);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
@@ -528,30 +532,6 @@ class EntityContextTest extends TestCase
     }
 
     /**
-     * Test that val() reads from the request.
-     *
-     * @return void
-     */
-    public function testValReadsRequest()
-    {
-        $this->request = $this->request->withParsedBody([
-            'title' => 'New title',
-            'notInEntity' => 'yes',
-        ]);
-        $row = new Article([
-            'title' => 'Test entity',
-            'body' => 'Something new'
-        ]);
-        $context = new EntityContext($this->request, [
-            'entity' => $row,
-            'table' => 'Articles',
-        ]);
-        $this->assertEquals('New title', $context->val('title'));
-        $this->assertEquals('yes', $context->val('notInEntity'));
-        $this->assertEquals($row->body, $context->val('body'));
-    }
-
-    /**
      * Test reading values from associated entities.
      *
      * @return void
@@ -562,14 +542,14 @@ class EntityContextTest extends TestCase
             'title' => 'Test entity',
             'user' => new Entity([
                 'username' => 'mark',
-                'fname' => 'Mark'
+                'fname' => 'Mark',
             ]),
             'comments' => [
                 new Entity(['comment' => 'Test comment']),
                 new Entity(['comment' => 'Second comment']),
-            ]
+            ],
         ]);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
@@ -598,9 +578,9 @@ class EntityContextTest extends TestCase
     public function testValMissingAssociation()
     {
         $row = new Article([
-            'id' => 1
+            'id' => 1,
         ]);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
@@ -625,19 +605,19 @@ class EntityContextTest extends TestCase
                 'articles' => [
                     new Article(['title' => 'First post']),
                     new Article(['title' => 'Second post']),
-                ]
+                ],
             ]),
         ]);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
 
         $result = $context->val('user.articles.0.title');
-        $this->assertEquals('First post', $result);
+        $this->assertSame('First post', $result);
 
         $result = $context->val('user.articles.1.title');
-        $this->assertEquals('Second post', $result);
+        $this->assertSame('Second post', $result);
     }
 
     /**
@@ -652,18 +632,18 @@ class EntityContextTest extends TestCase
             'user' => new Entity([
                 'username' => 'mark',
                 'fname' => 'Mark',
-                'groups' => [
+                'sections' => [
                     new Entity(['title' => 'PHP', 'id' => 1]),
                     new Entity(['title' => 'Javascript', 'id' => 2]),
-                ]
+                ],
             ]),
         ]);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
 
-        $result = $context->val('user.groups._ids');
+        $result = $context->val('user.sections._ids');
         $this->assertEquals([1, 2], $result);
     }
 
@@ -681,21 +661,21 @@ class EntityContextTest extends TestCase
             'user' => new Entity([
                 'username' => 'mark',
                 'fname' => 'Mark',
-                'groups' => [
+                'sections' => [
                     new Entity(['title' => 'PHP', 'thing' => 1]),
                     new Entity(['title' => 'Javascript', 'thing' => 4]),
-                ]
+                ],
             ]),
         ]);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
 
-        $this->getTableLocator()->get('Users')->belongsToMany('Groups');
-        $this->getTableLocator()->get('Groups')->setPrimaryKey('thing');
+        $this->getTableLocator()->get('Users')->belongsToMany('Sections');
+        $this->getTableLocator()->get('Sections')->setPrimaryKey('thing');
 
-        $result = $context->val('user.groups._ids');
+        $result = $context->val('user.sections._ids');
         $this->assertEquals([1, 4], $result);
     }
 
@@ -709,14 +689,14 @@ class EntityContextTest extends TestCase
         $table = $this->getTableLocator()->get('Articles');
         $column = $table->getSchema()->getColumn('title');
         $table->getSchema()->addColumn('title', ['default' => 'default title'] + $column);
-        $row = $table->newEntity();
+        $row = $table->newEmptyEntity();
 
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
         $result = $context->val('title');
-        $this->assertEquals('default title', $result);
+        $this->assertSame('default title', $result);
     }
 
     /**
@@ -730,14 +710,14 @@ class EntityContextTest extends TestCase
         $associatedTable = $table->hasMany('Comments')->getTarget();
         $column = $associatedTable->getSchema()->getColumn('comment');
         $associatedTable->getSchema()->addColumn('comment', ['default' => 'default comment'] + $column);
-        $row = $table->newEntity();
+        $row = $table->newEmptyEntity();
 
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
         $result = $context->val('comments.0.comment');
-        $this->assertEquals('default comment', $result);
+        $this->assertSame('default comment', $result);
     }
 
     /**
@@ -754,16 +734,16 @@ class EntityContextTest extends TestCase
             ->junction();
         $joinTable->getSchema()->addColumn('column', [
             'default' => 'default join table column value',
-            'type' => 'text'
+            'type' => 'text',
         ]);
-        $row = $table->newEntity();
+        $row = $table->newEmptyEntity();
 
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
         $result = $context->val('tags.0._joinData.column');
-        $this->assertEquals('default join table column value', $result);
+        $this->assertSame('default join table column value', $result);
     }
 
     /**
@@ -775,22 +755,22 @@ class EntityContextTest extends TestCase
     {
         $this->_setupTables();
 
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => new Entity(),
             'table' => 'Articles',
         ]);
         $articles = $this->getTableLocator()->get('Articles');
         $articles->getSchema()->addColumn('comments_on', [
-            'type' => 'boolean'
+            'type' => 'boolean',
         ]);
 
         $validator = $articles->getValidator();
         $validator->add('comments_on', 'is_bool', [
-            'rule' => 'boolean'
+            'rule' => 'boolean',
         ]);
         $articles->setValidator('default', $validator);
 
-        $this->assertFalse($context->isRequired('title'));
+        $this->assertNull($context->isRequired('title'));
     }
 
     /**
@@ -802,7 +782,7 @@ class EntityContextTest extends TestCase
     {
         $this->_setupTables();
 
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => new Entity(),
             'table' => 'Articles',
             'validator' => 'create',
@@ -811,9 +791,9 @@ class EntityContextTest extends TestCase
         $this->assertTrue($context->isRequired('title'));
         $this->assertFalse($context->isRequired('body'));
 
-        $this->assertFalse($context->isRequired('Herp.derp.derp'));
-        $this->assertFalse($context->isRequired('nope'));
-        $this->assertFalse($context->isRequired(''));
+        $this->assertNull($context->isRequired('Herp.derp.derp'));
+        $this->assertNull($context->isRequired('nope'));
+        $this->assertNull($context->isRequired(''));
     }
 
     /**
@@ -836,18 +816,18 @@ class EntityContextTest extends TestCase
             'comments' => [
                 new Entity(['comment' => 'First comment']),
                 new Entity(['comment' => 'Second comment']),
-            ]
+            ],
         ]);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
             'validator' => 'default',
         ]);
 
         $this->assertTrue($context->isRequired('comments.0.user_id'));
-        $this->assertFalse($context->isRequired('comments.0.other'));
-        $this->assertFalse($context->isRequired('user.0.other'));
-        $this->assertFalse($context->isRequired(''));
+        $this->assertNull($context->isRequired('comments.0.other'));
+        $this->assertNull($context->isRequired('user.0.other'));
+        $this->assertNull($context->isRequired(''));
     }
 
     /**
@@ -867,9 +847,9 @@ class EntityContextTest extends TestCase
             'title' => 'My title',
             'comments' => [
                 new Entity(['comment' => 'First comment']),
-            ]
+            ],
         ]);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
             'validator' => 'default',
@@ -893,15 +873,15 @@ class EntityContextTest extends TestCase
         $articles = $this->getTableLocator()->get('Articles');
 
         $validator = $articles->getValidator();
-        $validator->notEmpty('title', 'nope', function ($context) {
+        $validator->notEmptyString('title', 'nope', function ($context) {
             return $context['providers']['entity']->isRequired();
         });
         $articles->setValidator('default', $validator);
 
         $row = new Entity([
-            'username' => 'mark'
+            'username' => 'mark',
         ]);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Users',
             'validator' => 'default',
@@ -921,7 +901,7 @@ class EntityContextTest extends TestCase
 
         $comments = $this->getTableLocator()->get('Comments');
         $validator = $comments->getValidator();
-        $validator->allowEmpty('comment', function ($context) {
+        $validator->allowEmptyString('comment', null, function ($context) {
             return $context['providers']['entity']->isNew();
         });
 
@@ -929,9 +909,9 @@ class EntityContextTest extends TestCase
             'title' => 'My title',
             'comments' => [
                 new Entity(['comment' => 'First comment'], ['markNew' => false]),
-            ]
+            ],
         ]);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
             'validator' => 'default',
@@ -961,15 +941,15 @@ class EntityContextTest extends TestCase
             'comments' => [
                 new Entity(['comment' => 'First comment']),
                 new Entity(['comment' => 'Second comment']),
-            ]
+            ],
         ]);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
             'validator' => [
                 'Articles' => 'create',
-                'Comments' => 'custom'
-            ]
+                'Comments' => 'custom',
+            ],
         ]);
 
         $this->assertTrue($context->isRequired('title'));
@@ -991,17 +971,17 @@ class EntityContextTest extends TestCase
             'title' => 'My title',
             'user' => new Entity(['username' => 'Mark']),
         ]);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
             'validator' => [
                 'Articles' => 'create',
-                'Users' => 'custom'
-            ]
+                'Users' => 'custom',
+            ],
         ]);
 
         $this->assertTrue($context->isRequired('user.username'));
-        $this->assertFalse($context->isRequired('user.first_name'));
+        $this->assertNull($context->isRequired('user.first_name'));
     }
 
     /**
@@ -1018,12 +998,12 @@ class EntityContextTest extends TestCase
                 new Tag([
                     '_joinData' => new ArticlesTag([
                         'article_id' => 1,
-                        'tag_id' => 2
-                    ])
-                ])
+                        'tag_id' => 2,
+                    ]),
+                ]),
             ],
         ]);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
@@ -1045,14 +1025,14 @@ class EntityContextTest extends TestCase
             'title' => 'My title',
             'body' => 'Some content',
         ]);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
 
-        $this->assertEquals('string', $context->type('title'));
-        $this->assertEquals('text', $context->type('body'));
-        $this->assertEquals('integer', $context->type('user_id'));
+        $this->assertSame('string', $context->type('title'));
+        $this->assertSame('text', $context->type('body'));
+        $this->assertSame('integer', $context->type('user_id'));
         $this->assertNull($context->type('nope'));
     }
 
@@ -1069,13 +1049,13 @@ class EntityContextTest extends TestCase
             'title' => 'My title',
             'user' => new Entity(['username' => 'Mark']),
         ]);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
 
-        $this->assertEquals('string', $context->type('user.username'));
-        $this->assertEquals('text', $context->type('user.bio'));
+        $this->assertSame('string', $context->type('user.username'));
+        $this->assertSame('text', $context->type('user.bio'));
         $this->assertNull($context->type('user.nope'));
     }
 
@@ -1093,24 +1073,24 @@ class EntityContextTest extends TestCase
                 new Tag([
                     '_joinData' => new ArticlesTag([
                         'article_id' => 1,
-                        'tag_id' => 2
-                    ])
-                ])
+                        'tag_id' => 2,
+                    ]),
+                ]),
             ],
         ]);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
 
-        $this->assertEquals('integer', $context->type('tags.0._joinData.article_id'));
-        $this->assertNull($context->type('tags.0._joinData.non_existent'));
+        $this->assertSame('integer', $context->type('tags.0._joinData.article_id'));
+        $this->assertNull($context->type('tags.0._joinData.nonexistent'));
 
         // tests the fallback behavior
-        $this->assertEquals('integer', $context->type('tags.0._joinData._joinData.article_id'));
-        $this->assertEquals('integer', $context->type('tags.0._joinData.non_existent.article_id'));
-        $this->assertNull($context->type('tags.0._joinData._joinData.non_existent'));
-        $this->assertNull($context->type('tags.0._joinData.non_existent'));
+        $this->assertSame('integer', $context->type('tags.0._joinData._joinData.article_id'));
+        $this->assertSame('integer', $context->type('tags.0._joinData.nonexistent.article_id'));
+        $this->assertNull($context->type('tags.0._joinData._joinData.nonexistent'));
+        $this->assertNull($context->type('tags.0._joinData.nonexistent'));
     }
 
     /**
@@ -1129,33 +1109,37 @@ class EntityContextTest extends TestCase
                 new Tag([
                     '_joinData' => new ArticlesTag([
                         'article_id' => 1,
-                        'tag_id' => 2
-                    ])
-                ])
+                        'tag_id' => 2,
+                    ]),
+                ]),
             ],
         ]);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
 
         $expected = [
-            'length' => 255, 'precision' => null
+            'length' => 255, 'precision' => null,
+            'null' => null, 'default' => null, 'comment' => null,
         ];
         $this->assertEquals($expected, $context->attributes('title'));
 
         $expected = [
-            'length' => null, 'precision' => null
+            'length' => null, 'precision' => null,
+            'null' => null, 'default' => null, 'comment' => null,
         ];
         $this->assertEquals($expected, $context->attributes('body'));
 
         $expected = [
-            'length' => 10, 'precision' => 3
+            'length' => 10, 'precision' => 3,
+            'null' => null, 'default' => null, 'comment' => null,
         ];
         $this->assertEquals($expected, $context->attributes('user.rating'));
 
         $expected = [
-            'length' => 11, 'precision' => null
+            'length' => 11, 'precision' => null,
+            'null' => false, 'default' => null, 'comment' => null,
         ];
         $this->assertEquals($expected, $context->attributes('tags.0._joinData.article_id'));
     }
@@ -1176,7 +1160,7 @@ class EntityContextTest extends TestCase
         $row->setError('title', []);
         $row->setError('body', 'Gotta have one');
         $row->setError('user_id', ['Required field']);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
@@ -1203,7 +1187,7 @@ class EntityContextTest extends TestCase
         $row->setError('title', []);
         $row->setError('body', 'Gotta have one');
         $row->user->setError('username', ['Required']);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
@@ -1232,7 +1216,7 @@ class EntityContextTest extends TestCase
 
         $row->user->setError('username', ['Required']);
 
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
@@ -1261,12 +1245,12 @@ class EntityContextTest extends TestCase
             'comments' => [
                 new Entity(['comment' => '']),
                 new Entity(['comment' => 'Second comment']),
-            ]
+            ],
         ]);
         $row->comments[0]->setError('comment', ['Is required']);
         $row->comments[0]->setError('article_id', ['Is required']);
 
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
             'validator' => 'default',
@@ -1295,14 +1279,14 @@ class EntityContextTest extends TestCase
             'tags' => [
                 new Tag([
                     '_joinData' => new ArticlesTag([
-                        'article_id' => 1
-                    ])
-                ])
+                        'article_id' => 1,
+                    ]),
+                ]),
             ],
         ]);
         $row->tags[0]->_joinData->setError('tag_id', ['Is required']);
 
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
@@ -1322,11 +1306,11 @@ class EntityContextTest extends TestCase
 
         $row = new Article([
             'title' => 'My title',
-            'options' => ['subpages' => '']
+            'options' => ['subpages' => ''],
         ]);
         $row->setError('options', ['subpages' => ['_empty' => 'required value']]);
 
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
@@ -1353,11 +1337,11 @@ class EntityContextTest extends TestCase
             'title' => 'My title',
             'tags' => [
                 $tagOne,
-                $tagTwo
-            ]
+                $tagTwo,
+            ],
         ]);
 
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
@@ -1378,7 +1362,7 @@ class EntityContextTest extends TestCase
         $articles->belongsTo('Users');
         $articles->belongsToMany('Tags');
         $articles->hasMany('Comments');
-        $articles->setEntityClass(__NAMESPACE__ . '\Article');
+        $articles->setEntityClass(Article::class);
 
         $articlesTags = $this->getTableLocator()->get('ArticlesTags');
         $comments = $this->getTableLocator()->get('Comments');
@@ -1395,7 +1379,7 @@ class EntityContextTest extends TestCase
         $articlesTags->setSchema([
             'article_id' => ['type' => 'integer', 'length' => 11, 'null' => false],
             'tag_id' => ['type' => 'integer', 'length' => 11, 'null' => false],
-            '_constraints' => ['unique_tag' => ['type' => 'primary', 'columns' => ['article_id', 'tag_id']]]
+            '_constraints' => ['unique_tag' => ['type' => 'primary', 'columns' => ['article_id', 'tag_id']]],
         ]);
         $users->setSchema([
             'id' => ['type' => 'integer', 'length' => 11],
@@ -1405,24 +1389,24 @@ class EntityContextTest extends TestCase
         ]);
 
         $validator = new Validator();
-        $validator->requirePresence('title', true, 'Don\'t forget a title!');
+        $validator->notEmptyString('title', 'Don\'t forget a title!');
         $validator->add('title', 'minlength', [
-            'rule' => ['minlength', 10]
+            'rule' => ['minlength', 10],
         ])
         ->add('body', 'maxlength', [
-            'rule' => ['maxlength', 1000]
-        ])->allowEmpty('body');
+            'rule' => ['maxlength', 1000],
+        ])->allowEmptyString('body');
         $articles->setValidator('create', $validator);
 
         $validator = new Validator();
         $validator->add('username', 'length', [
-            'rule' => ['minlength', 10]
+            'rule' => ['minlength', 10],
         ]);
         $users->setValidator('custom', $validator);
 
         $validator = new Validator();
         $validator->add('comment', 'length', [
-            'rule' => ['minlength', 10]
+            'rule' => ['minlength', 10],
         ]);
         $comments->setValidator('custom', $validator);
 
@@ -1439,7 +1423,7 @@ class EntityContextTest extends TestCase
      */
     public function testFieldNames()
     {
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => new Entity(),
             'table' => 'Articles',
         ]);
@@ -1456,9 +1440,9 @@ class EntityContextTest extends TestCase
     {
         $row = new Article([
             'title' => 'Test entity',
-            'body' => 'Something new'
+            'body' => 'Something new',
         ]);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);
@@ -1474,10 +1458,10 @@ class EntityContextTest extends TestCase
                 'articles' => [
                     new Article(['title' => 'First post']),
                     new Article(['title' => 'Second post']),
-                ]
+                ],
             ]),
         ]);
-        $context = new EntityContext($this->request, [
+        $context = new EntityContext([
             'entity' => $row,
             'table' => 'Articles',
         ]);

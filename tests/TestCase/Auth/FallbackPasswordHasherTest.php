@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -18,19 +20,25 @@ use Cake\Auth\DefaultPasswordHasher;
 use Cake\Auth\FallbackPasswordHasher;
 use Cake\Auth\WeakPasswordHasher;
 use Cake\TestSuite\TestCase;
+use Cake\Utility\Security;
 
 /**
  * Test case for FallbackPasswordHasher
  */
 class FallbackPasswordHasherTest extends TestCase
 {
+    public function setUp(): void
+    {
+        parent::setUp();
+        Security::setSalt('YJfIxfs2guVoUubWDYhG93b0qyJfIxfs2guwvniR2G0FgaC9mia1390as13dla8kjasdlwerpoiASf');
+    }
 
     /**
      * Tests that only the first hasher is user for hashing a password
      *
      * @return void
      */
-    public function testHash()
+    public function testHash(): void
     {
         $hasher = new FallbackPasswordHasher(['hashers' => ['Weak', 'Default']]);
         $weak = new WeakPasswordHasher();
@@ -47,7 +55,7 @@ class FallbackPasswordHasherTest extends TestCase
      *
      * @return void
      */
-    public function testCheck()
+    public function testCheck(): void
     {
         $hasher = new FallbackPasswordHasher(['hashers' => ['Weak', 'Default']]);
         $weak = new WeakPasswordHasher();
@@ -65,7 +73,7 @@ class FallbackPasswordHasherTest extends TestCase
      *
      * @return void
      */
-    public function testCheckWithConfigs()
+    public function testCheckWithConfigs(): void
     {
         $hasher = new FallbackPasswordHasher(['hashers' => ['Default', 'Weak' => ['hashType' => 'md5']]]);
         $legacy = new WeakPasswordHasher(['hashType' => 'md5']);
@@ -83,7 +91,7 @@ class FallbackPasswordHasherTest extends TestCase
      *
      * @return void
      */
-    public function testNeedsRehash()
+    public function testNeedsRehash(): void
     {
         $hasher = new FallbackPasswordHasher(['hashers' => ['Default', 'Weak']]);
         $weak = new WeakPasswordHasher();

@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -14,6 +16,7 @@
  */
 namespace Cake\Test\TestCase\Core;
 
+use Cake\Core\Configure;
 use Cake\Http\Response;
 use Cake\TestSuite\TestCase;
 
@@ -29,19 +32,22 @@ class FunctionsTest extends TestCase
     {
         $_ENV['DOES_NOT_EXIST'] = null;
         $this->assertNull(env('DOES_NOT_EXIST'));
-        $this->assertEquals('default', env('DOES_NOT_EXIST', 'default'));
+        $this->assertSame('default', env('DOES_NOT_EXIST', 'default'));
 
         $_ENV['DOES_EXIST'] = 'some value';
-        $this->assertEquals('some value', env('DOES_EXIST'));
-        $this->assertEquals('some value', env('DOES_EXIST', 'default'));
+        $this->assertSame('some value', env('DOES_EXIST'));
+        $this->assertSame('some value', env('DOES_EXIST', 'default'));
 
         $_ENV['EMPTY_VALUE'] = '';
-        $this->assertEquals('', env('EMPTY_VALUE'));
-        $this->assertEquals('', env('EMPTY_VALUE', 'default'));
+        $this->assertSame('', env('EMPTY_VALUE'));
+        $this->assertSame('', env('EMPTY_VALUE', 'default'));
 
         $_ENV['ZERO'] = '0';
-        $this->assertEquals('0', env('ZERO'));
-        $this->assertEquals('0', env('ZERO', '1'));
+        $this->assertSame('0', env('ZERO'));
+        $this->assertSame('0', env('ZERO', '1'));
+
+        $this->assertSame('', env('DOCUMENT_ROOT'));
+        $this->assertStringContainsString('phpunit', env('PHP_SELF'));
     }
 
     /**
@@ -64,7 +70,7 @@ class FunctionsTest extends TestCase
             [null, null],
             [1, 1],
             [1.1, 1.1],
-            [new \stdClass, '(object)stdClass'],
+            [new \stdClass(), '(object)stdClass'],
             [new Response(), ''],
             [['clean', '"clean-me'], ['clean', '&quot;clean-me']],
         ];
@@ -72,12 +78,12 @@ class FunctionsTest extends TestCase
 
     /**
      * Test error messages coming out when deprecated level is on, manually setting the stack frame
-     *
-     * @expectedException PHPUnit\Framework\Error\Deprecated
-     * @expectedExceptionMessageRegExp /This is going away - (.*?)[\/\\]FunctionsTest.php, line\: \d+/
      */
     public function testDeprecationWarningEnabled()
     {
+        $this->expectDeprecation();
+        $this->expectDeprecationMessageMatches('/This is going away - (.*?)[\/\\\]FunctionsTest.php, line\: \d+/');
+
         $this->withErrorReporting(E_ALL, function () {
             deprecationWarning('This is going away', 2);
         });
@@ -85,12 +91,27 @@ class FunctionsTest extends TestCase
 
     /**
      * Test error messages coming out when deprecated level is on, not setting the stack frame manually
-     *
-     * @expectedException PHPUnit\Framework\Error\Deprecated
-     * @expectedExceptionMessageRegExp /This is going away - (.*?)[\/\\]TestCase.php, line\: \d+/
      */
     public function testDeprecationWarningEnabledDefaultFrame()
     {
+        $this->expectDeprecation();
+        $this->expectDeprecationMessageMatches('/This is going away - (.*?)[\/\\\]TestCase.php, line\: \d+/');
+
+        $this->withErrorReporting(E_ALL, function () {
+            deprecationWarning('This is going away');
+        });
+    }
+
+    /**
+     * Test no error when deprecation matches ignore paths.
+     *
+     * @return void
+     */
+    public function testDeprecationWarningPathDisabled()
+    {
+        $this->expectNotToPerformAssertions();
+
+        Configure::write('Error.ignoredDeprecationPaths', ['src/TestSuite/*']);
         $this->withErrorReporting(E_ALL, function () {
             deprecationWarning('This is going away');
         });
@@ -103,21 +124,24 @@ class FunctionsTest extends TestCase
      */
     public function testDeprecationWarningLevelDisabled()
     {
+        $this->expectNotToPerformAssertions();
+
         $this->withErrorReporting(E_ALL ^ E_USER_DEPRECATED, function () {
-            $this->assertNull(deprecationWarning('This is going away'));
+            deprecationWarning('This is going away');
         });
     }
 
     /**
      * Test error messages coming out when warning level is on.
-     *
-     * @expectedException PHPUnit\Framework\Error\Warning
-     * @expectedExceptionMessageRegExp /This is going away - (.*?)[\/\\]TestCase.php, line\: \d+/
      */
     public function testTriggerWarningEnabled()
     {
+        $this->expectWarning();
+        $this->expectWarningMessageMatches('/This is going away - (.*?)[\/\\\]TestCase.php, line\: \d+/');
+
         $this->withErrorReporting(E_ALL, function () {
             triggerWarning('This is going away');
+            $this->assertTrue(true);
         });
     }
 
@@ -129,7 +153,8 @@ class FunctionsTest extends TestCase
     public function testTriggerWarningLevelDisabled()
     {
         $this->withErrorReporting(E_ALL ^ E_USER_WARNING, function () {
-            $this->assertNull(triggerWarning('This is going away'));
+            triggerWarning('This is going away');
+            $this->assertTrue(true);
         });
     }
 
@@ -140,8 +165,8 @@ class FunctionsTest extends TestCase
      */
     public function testgetTypeName()
     {
-        $this->assertEquals('stdClass', getTypeName(new \stdClass()));
-        $this->assertEquals('array', getTypeName([]));
-        $this->assertEquals('string', getTypeName(''));
+        $this->assertSame('stdClass', getTypeName(new \stdClass()));
+        $this->assertSame('array', getTypeName([]));
+        $this->assertSame('string', getTypeName(''));
     }
 }

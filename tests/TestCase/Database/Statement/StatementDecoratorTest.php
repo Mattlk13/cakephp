@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -15,6 +17,7 @@
 namespace Cake\Test\TestCase\Database\Statement;
 
 use Cake\Database\Statement\StatementDecorator;
+use Cake\Database\StatementInterface;
 use Cake\TestSuite\TestCase;
 
 /**
@@ -22,7 +25,6 @@ use Cake\TestSuite\TestCase;
  */
 class StatementDecoratorTest extends TestCase
 {
-
     /**
      * Tests that calling lastInsertId will proxy it to
      * the driver's lastInsertId method
@@ -31,14 +33,14 @@ class StatementDecoratorTest extends TestCase
      */
     public function testLastInsertId()
     {
-        $statement = $this->getMockBuilder('\PDOStatement')->getMock();
-        $driver = $this->getMockBuilder('\Cake\Database\Driver')->getMock();
+        $statement = $this->getMockBuilder(StatementInterface::class)->getMock();
+        $driver = $this->getMockBuilder('Cake\Database\Driver')->getMock();
         $statement = new StatementDecorator($statement, $driver);
 
         $driver->expects($this->once())->method('lastInsertId')
             ->with('users')
             ->will($this->returnValue(2));
-        $this->assertEquals(2, $statement->lastInsertId('users'));
+        $this->assertSame(2, $statement->lastInsertId('users'));
     }
 
     /**
@@ -49,8 +51,8 @@ class StatementDecoratorTest extends TestCase
      */
     public function testLastInsertIdWithReturning()
     {
-        $internal = $this->getMockBuilder('\PDOStatement')->getMock();
-        $driver = $this->getMockBuilder('\Cake\Database\Driver')->getMock();
+        $internal = $this->getMockBuilder(StatementInterface::class)->getMock();
+        $driver = $this->getMockBuilder('Cake\Database\Driver')->getMock();
         $statement = new StatementDecorator($internal, $driver);
 
         $internal->expects($this->once())->method('columnCount')
@@ -59,7 +61,7 @@ class StatementDecoratorTest extends TestCase
             ->with('assoc')
             ->will($this->returnValue(['id' => 2]));
         $driver->expects($this->never())->method('lastInsertId');
-        $this->assertEquals(2, $statement->lastInsertId('users', 'id'));
+        $this->assertSame(2, $statement->lastInsertId('users', 'id'));
     }
 
     /**
@@ -70,11 +72,13 @@ class StatementDecoratorTest extends TestCase
      */
     public function testNoDoubleExecution()
     {
-        $inner = $this->getMockBuilder('\PDOStatement')->getMock();
-        $driver = $this->getMockBuilder('\Cake\Database\Driver')->getMock();
+        $inner = $this->getMockBuilder(StatementInterface::class)->getMock();
+        $driver = $this->getMockBuilder('Cake\Database\DriverInterface')->getMock();
         $statement = new StatementDecorator($inner, $driver);
 
-        $inner->expects($this->once())->method('execute');
+        $inner->expects($this->once())
+            ->method('execute')
+            ->will($this->returnValue(true));
         $this->assertSame($inner, $statement->getIterator());
         $this->assertSame($inner, $statement->getIterator());
     }

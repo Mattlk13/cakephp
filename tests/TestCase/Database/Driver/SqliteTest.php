@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -23,7 +25,6 @@ use PDO;
  */
 class SqliteTest extends TestCase
 {
-
     /**
      * Test connecting to Sqlite with default configuration
      *
@@ -32,7 +33,7 @@ class SqliteTest extends TestCase
     public function testConnectionConfigDefault()
     {
         $driver = $this->getMockBuilder('Cake\Database\Driver\Sqlite')
-            ->setMethods(['_connect'])
+            ->onlyMethods(['_connect'])
             ->getMock();
         $dsn = 'sqlite::memory:';
         $expected = [
@@ -49,7 +50,7 @@ class SqliteTest extends TestCase
         $expected['flags'] += [
             PDO::ATTR_PERSISTENT => false,
             PDO::ATTR_EMULATE_PREPARES => false,
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         ];
         $driver->expects($this->once())->method('_connect')
             ->with($dsn, $expected);
@@ -70,10 +71,10 @@ class SqliteTest extends TestCase
             'flags' => [1 => true, 2 => false],
             'encoding' => 'a-language',
             'init' => ['Execute this', 'this too'],
-            'mask' => 0666
+            'mask' => 0666,
         ];
         $driver = $this->getMockBuilder('Cake\Database\driver\Sqlite')
-            ->setMethods(['_connect', 'getConnection'])
+            ->onlyMethods(['_connect', 'getConnection'])
             ->setConstructorArgs([$config])
             ->getMock();
         $dsn = 'sqlite:bar.db';
@@ -83,15 +84,15 @@ class SqliteTest extends TestCase
         $expected['flags'] += [
             PDO::ATTR_PERSISTENT => true,
             PDO::ATTR_EMULATE_PREPARES => false,
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         ];
 
         $connection = $this->getMockBuilder('StdClass')
-            ->setMethods(['exec'])
+            ->addMethods(['exec'])
             ->getMock();
-        $connection->expects($this->at(0))->method('exec')->with('Execute this');
-        $connection->expects($this->at(1))->method('exec')->with('this too');
-        $connection->expects($this->exactly(2))->method('exec');
+        $connection->expects($this->exactly(2))
+            ->method('exec')
+            ->withConsecutive(['Execute this'], ['this too']);
 
         $driver->expects($this->once())->method('_connect')
             ->with($dsn, $expected);
@@ -130,7 +131,8 @@ class SqliteTest extends TestCase
     {
         $driver = new Sqlite();
         $mock = $this->getMockBuilder(PDO::class)
-            ->setMethods(['quote', 'quoteIdentifier'])
+            ->onlyMethods(['quote'])
+            ->addMethods(['quoteIdentifier'])
             ->disableOriginalConstructor()
             ->getMock();
         $mock->expects($this->any())

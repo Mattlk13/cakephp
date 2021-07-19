@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -16,6 +18,7 @@ namespace Cake\Test\TestCase\Core;
 use Cake\Console\CommandCollection;
 use Cake\Core\BasePlugin;
 use Cake\Core\Configure;
+use Cake\Core\Container;
 use Cake\Core\Plugin;
 use Cake\Core\PluginApplicationInterface;
 use Cake\Http\MiddlewareQueue;
@@ -30,13 +33,12 @@ use TestPlugin\Plugin as TestPlugin;
  */
 class BasePluginTest extends TestCase
 {
-
     /**
      * tearDown method
      *
      * @return void
      */
-    public function tearDown()
+    public function tearDown(): void
     {
         parent::tearDown();
         $this->clearPlugins();
@@ -51,13 +53,14 @@ class BasePluginTest extends TestCase
     {
         $plugin = new BasePlugin([
             'bootstrap' => false,
-            'routes' => false
+            'routes' => false,
         ]);
 
         $this->assertFalse($plugin->isEnabled('routes'));
         $this->assertFalse($plugin->isEnabled('bootstrap'));
         $this->assertTrue($plugin->isEnabled('console'));
         $this->assertTrue($plugin->isEnabled('middleware'));
+        $this->assertTrue($plugin->isEnabled('services'));
     }
 
     public function testGetName()
@@ -82,11 +85,18 @@ class BasePluginTest extends TestCase
         $this->assertSame($middleware, $plugin->middleware($middleware));
     }
 
-    public function testConsoleNoop()
+    public function testConsole()
     {
         $plugin = new BasePlugin();
         $commands = new CommandCollection();
         $this->assertSame($commands, $plugin->console($commands));
+    }
+
+    public function testServices()
+    {
+        $plugin = new BasePlugin();
+        $container = new Container();
+        $this->assertNull($plugin->services($container));
     }
 
     public function testConsoleFind()
@@ -109,7 +119,7 @@ class BasePluginTest extends TestCase
         $plugin = new TestPlugin();
 
         $this->assertFalse(Configure::check('PluginTest.test_plugin.bootstrap'));
-        $this->assertNull($plugin->bootstrap($app));
+        $plugin->bootstrap($app);
         $this->assertTrue(Configure::check('PluginTest.test_plugin.bootstrap'));
     }
 
@@ -120,7 +130,8 @@ class BasePluginTest extends TestCase
     {
         $app = $this->createMock(PluginApplicationInterface::class);
         $plugin = new BasePlugin();
-        $this->assertNull($plugin->bootstrap($app));
+        $plugin->bootstrap($app);
+        $this->assertTrue(true);
     }
 
     /**
@@ -128,10 +139,10 @@ class BasePluginTest extends TestCase
      */
     public function testRoutesSkipMissingFile()
     {
-        $app = $this->createMock(PluginApplicationInterface::class);
         $plugin = new BasePlugin();
         $routeBuilder = new RouteBuilder(new RouteCollection(), '/');
-        $this->assertNull($plugin->routes($routeBuilder));
+        $plugin->routes($routeBuilder);
+        $this->assertTrue(true);
     }
 
     public function testConstructorArguments()
@@ -140,12 +151,15 @@ class BasePluginTest extends TestCase
             'routes' => false,
             'bootstrap' => false,
             'console' => false,
-            'middleware' => false
+            'middleware' => false,
+            'templatePath' => '/plates/',
         ]);
         $this->assertFalse($plugin->isEnabled('routes'));
         $this->assertFalse($plugin->isEnabled('bootstrap'));
         $this->assertFalse($plugin->isEnabled('console'));
         $this->assertFalse($plugin->isEnabled('middleware'));
+
+        $this->assertSame('/plates/', $plugin->getTemplatePath());
     }
 
     public function testGetPathBaseClass()
@@ -156,6 +170,7 @@ class BasePluginTest extends TestCase
         $this->assertSame($expected, $plugin->getPath());
         $this->assertSame($expected . 'config' . DS, $plugin->getConfigPath());
         $this->assertSame($expected . 'src' . DS, $plugin->getClassPath());
+        $this->assertSame($expected . 'templates' . DS, $plugin->getTemplatePath());
     }
 
     public function testGetPathOptionValue()
@@ -165,6 +180,7 @@ class BasePluginTest extends TestCase
         $this->assertSame($expected, $plugin->getPath());
         $this->assertSame($expected . 'config' . DS, $plugin->getConfigPath());
         $this->assertSame($expected . 'src' . DS, $plugin->getClassPath());
+        $this->assertSame($expected . 'templates' . DS, $plugin->getTemplatePath());
     }
 
     public function testGetPathSubclass()
@@ -174,5 +190,6 @@ class BasePluginTest extends TestCase
         $this->assertSame($expected, $plugin->getPath());
         $this->assertSame($expected . 'config' . DS, $plugin->getConfigPath());
         $this->assertSame($expected . 'src' . DS, $plugin->getClassPath());
+        $this->assertSame($expected . 'templates' . DS, $plugin->getTemplatePath());
     }
 }

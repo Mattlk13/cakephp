@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * FileLogTest file
  *
@@ -18,48 +20,12 @@ namespace Cake\Test\TestCase\Log\Engine;
 
 use Cake\Log\Engine\FileLog;
 use Cake\TestSuite\TestCase;
-use JsonSerializable;
-
-/**
- * used for testing when an object is passed to a logger
- */
-class StringObject
-{
-
-    /**
-     * String representation of the object
-     *
-     * @return string
-     */
-    public function __toString()
-    {
-        return 'Hey!';
-    }
-}
-
-/**
- * used for testing when an serializable is passed to a logger
- */
-class JsonObject implements JsonSerializable
-{
-
-    /**
-     * String representation of the object
-     *
-     * @return array
-     */
-    public function jsonSerialize()
-    {
-        return ['hello' => 'world'];
-    }
-}
 
 /**
  * FileLogTest class
  */
 class FileLogTest extends TestCase
 {
-
     /**
      * testLogFileWriting method
      *
@@ -74,36 +40,19 @@ class FileLogTest extends TestCase
         $this->assertFileExists(LOGS . 'error.log');
 
         $result = file_get_contents(LOGS . 'error.log');
-        $this->assertRegExp('/^2[0-9]{3}-[0-9]+-[0-9]+ [0-9]+:[0-9]+:[0-9]+ Warning: Test warning/', $result);
+        $this->assertMatchesRegularExpression('/^2[0-9]{3}-[0-9]+-[0-9]+ [0-9]+:[0-9]+:[0-9]+ Warning: Test warning/', $result);
 
         $log->log('debug', 'Test warning');
         $this->assertFileExists(LOGS . 'debug.log');
 
         $result = file_get_contents(LOGS . 'debug.log');
-        $this->assertRegExp('/^2[0-9]{3}-[0-9]+-[0-9]+ [0-9]+:[0-9]+:[0-9]+ Debug: Test warning/', $result);
+        $this->assertMatchesRegularExpression('/^2[0-9]{3}-[0-9]+-[0-9]+ [0-9]+:[0-9]+:[0-9]+ Debug: Test warning/', $result);
 
         $log->log('random', 'Test warning');
         $this->assertFileExists(LOGS . 'random.log');
 
         $result = file_get_contents(LOGS . 'random.log');
-        $this->assertRegExp('/^2[0-9]{3}-[0-9]+-[0-9]+ [0-9]+:[0-9]+:[0-9]+ Random: Test warning/', $result);
-
-        $object = new StringObject;
-        $log->log('debug', $object);
-        $this->assertFileExists(LOGS . 'debug.log');
-        $result = file_get_contents(LOGS . 'debug.log');
-        $this->assertContains('Debug: Hey!', $result);
-
-        $object = new JsonObject;
-        $log->log('debug', $object);
-        $this->assertFileExists(LOGS . 'debug.log');
-        $result = file_get_contents(LOGS . 'debug.log');
-        $this->assertContains('Debug: ' . json_encode(['hello' => 'world']), $result);
-
-        $log->log('debug', [1, 2]);
-        $this->assertFileExists(LOGS . 'debug.log');
-        $result = file_get_contents(LOGS . 'debug.log');
-        $this->assertContains('Debug: ' . print_r([1, 2], true), $result);
+        $this->assertMatchesRegularExpression('/^2[0-9]{3}-[0-9]+-[0-9]+ [0-9]+:[0-9]+:[0-9]+ Random: Test warning/', $result);
     }
 
     /**
@@ -135,13 +84,13 @@ class FileLogTest extends TestCase
         $log = new FileLog([
             'path' => $path,
             'size' => 35,
-            'rotate' => 2
+            'rotate' => 2,
         ]);
         $log->log('warning', 'Test warning one');
         $this->assertFileExists($path . 'error.log');
 
         $result = file_get_contents($path . 'error.log');
-        $this->assertRegExp('/Warning: Test warning one/', $result);
+        $this->assertMatchesRegularExpression('/Warning: Test warning one/', $result);
         $this->assertCount(0, glob($path . 'error.log.*'));
 
         clearstatcache();
@@ -151,24 +100,24 @@ class FileLogTest extends TestCase
         $this->assertCount(1, $files);
 
         $result = file_get_contents($files[0]);
-        $this->assertRegExp('/this text is under 35 bytes/', $result);
-        $this->assertRegExp('/Warning: Test warning one/', $result);
+        $this->assertMatchesRegularExpression('/this text is under 35 bytes/', $result);
+        $this->assertMatchesRegularExpression('/Warning: Test warning one/', $result);
 
         sleep(1);
         clearstatcache();
         $log->log('warning', 'Test warning third');
 
         $result = file_get_contents($path . 'error.log');
-        $this->assertRegExp('/Warning: Test warning third/', $result);
+        $this->assertMatchesRegularExpression('/Warning: Test warning third/', $result);
 
         $files = glob($path . 'error.log.*');
         $this->assertCount(2, $files);
 
         $result = file_get_contents($files[0]);
-        $this->assertRegExp('/this text is under 35 bytes/', $result);
+        $this->assertMatchesRegularExpression('/this text is under 35 bytes/', $result);
 
         $result = file_get_contents($files[1]);
-        $this->assertRegExp('/Warning: Test warning second/', $result);
+        $this->assertMatchesRegularExpression('/Warning: Test warning second/', $result);
 
         file_put_contents($path . 'error.log.0000000000', "The oldest log file with over 35 bytes.\n");
 
@@ -181,26 +130,26 @@ class FileLogTest extends TestCase
         $this->assertCount(2, $files);
 
         $result = file_get_contents($path . 'error.log');
-        $this->assertRegExp('/Warning: Test warning fourth/', $result);
+        $this->assertMatchesRegularExpression('/Warning: Test warning fourth/', $result);
 
         $result = file_get_contents(array_pop($files));
-        $this->assertRegExp('/Warning: Test warning third/', $result);
+        $this->assertMatchesRegularExpression('/Warning: Test warning third/', $result);
 
         $result = file_get_contents(array_pop($files));
-        $this->assertRegExp('/Warning: Test warning second/', $result);
+        $this->assertMatchesRegularExpression('/Warning: Test warning second/', $result);
 
         file_put_contents($path . 'debug.log', "this text is just greater than 35 bytes\n");
         $log = new FileLog([
             'path' => $path,
             'size' => 35,
-            'rotate' => 0
+            'rotate' => 0,
         ]);
         file_put_contents($path . 'debug.log.0000000000', "The oldest log file with over 35 bytes.\n");
         $log->log('debug', 'Test debug');
         $this->assertFileExists($path . 'debug.log');
 
         $result = file_get_contents($path . 'debug.log');
-        $this->assertRegExp('/^2[0-9]{3}-[0-9]+-[0-9]+ [0-9]+:[0-9]+:[0-9]+ Debug: Test debug/', $result);
+        $this->assertMatchesRegularExpression('/^2[0-9]{3}-[0-9]+-[0-9]+ [0-9]+:[0-9]+:[0-9]+ Debug: Test debug/', $result);
         $this->assertFalse(strstr($result, 'greater than 5 bytes'));
         $this->assertCount(0, glob($path . 'debug.log.*'));
     }
@@ -218,21 +167,21 @@ class FileLogTest extends TestCase
         $log->log('warning', 'Test warning one');
         $result = substr(sprintf('%o', fileperms($path . 'error.log')), -4);
         $expected = '0666';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
         unlink($path . 'error.log');
 
         $log = new FileLog(['path' => $path, 'mask' => 0644]);
         $log->log('warning', 'Test warning two');
         $result = substr(sprintf('%o', fileperms($path . 'error.log')), -4);
         $expected = '0644';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
         unlink($path . 'error.log');
 
         $log = new FileLog(['path' => $path, 'mask' => 0640]);
         $log->log('warning', 'Test warning three');
         $result = substr(sprintf('%o', fileperms($path . 'error.log')), -4);
         $expected = '0640';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
         unlink($path . 'error.log');
     }
 
@@ -248,5 +197,24 @@ class FileLogTest extends TestCase
         foreach ($files as $file) {
             unlink($file);
         }
+    }
+
+    /**
+     * test dateFormat option
+     *
+     * @return void
+     */
+    public function testDateFormat()
+    {
+        $this->_deleteLogs(LOGS);
+
+        // original 'Y-m-d H:i:s' format test was testLogFileWriting() method
+
+        // 'c': ISO 8601 date (added in PHP 5)
+        $log = new FileLog(['path' => LOGS, 'dateFormat' => 'c']);
+        $log->log('warning', 'Test warning');
+
+        $result = file_get_contents(LOGS . 'error.log');
+        $this->assertMatchesRegularExpression('/^2[0-9]{3}-[0-9]+-[0-9]+T[0-9]+:[0-9]+:[0-9]+\+\d{2}:\d{2} Warning: Test warning/', $result);
     }
 }

@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 namespace Cake\Test\TestCase\Http;
 
 use Cake\Http\CorsBuilder;
@@ -169,7 +171,7 @@ class CorsBuilderTest extends TestCase
     protected function assertHeader($expected, Response $response, $header)
     {
         $this->assertTrue($response->hasHeader($header), 'Header key not found.');
-        $this->assertEquals($expected, $response->getHeaderLine($header), 'Header value not found.');
+        $this->assertSame($expected, $response->getHeaderLine($header), 'Header value not found.');
     }
 
     /**

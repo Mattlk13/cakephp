@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -22,7 +24,6 @@ use Cake\TestSuite\TestCase;
  */
 class ResultSetDecoratorTest extends TestCase
 {
-
     /**
      * Tests the decorator can wrap a simple iterator
      *
@@ -48,7 +49,7 @@ class ResultSetDecoratorTest extends TestCase
     }
 
     /**
-     * Tests json encoding method
+     * Tests JSON encoding method
      *
      * @return void
      */
@@ -82,8 +83,8 @@ class ResultSetDecoratorTest extends TestCase
         $data = new \ArrayIterator([1, 2, 3]);
         $decorator = new ResultSetDecorator($data);
 
-        $this->assertEquals(1, $decorator->first());
-        $this->assertEquals(1, $decorator->first());
+        $this->assertSame(1, $decorator->first());
+        $this->assertSame(1, $decorator->first());
     }
 
     /**
@@ -96,7 +97,7 @@ class ResultSetDecoratorTest extends TestCase
         $data = new \ArrayIterator([1, 2, 3]);
         $decorator = new ResultSetDecorator($data);
 
-        $this->assertEquals(3, $decorator->count());
+        $this->assertSame(3, $decorator->count());
         $this->assertCount(3, $decorator);
     }
 }

@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -23,17 +25,16 @@ use Cake\Utility\Security;
  */
 class WeakPasswordHasherTest extends TestCase
 {
-
     /**
      * setUp method
      *
      * @return void
      */
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
 
-        Security::setSalt('YJfIxfs2guVoUubWDYhG93b0qyJfIxfs2guwvniR2G0FgaC9mi');
+        Security::setSalt('YJfIxfs2guVoUubWDYhG93b0qyJfIxfs2guwvniR2G0FgaC9mia1390as13dla8kjasdlwerpoiASf');
     }
 
     /**
@@ -42,7 +43,7 @@ class WeakPasswordHasherTest extends TestCase
      *
      * @return void
      */
-    public function testNeedsRehash()
+    public function testNeedsRehash(): void
     {
         $hasher = new WeakPasswordHasher();
         $this->assertTrue($hasher->needsRehash(md5('foo')));
@@ -55,7 +56,7 @@ class WeakPasswordHasherTest extends TestCase
      *
      * @return void
      */
-    public function testHashAndCheck()
+    public function testHashAndCheck(): void
     {
         $hasher = new WeakPasswordHasher();
         $hasher->setConfig('hashType', 'md5');

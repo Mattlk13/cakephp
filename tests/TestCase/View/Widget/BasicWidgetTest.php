@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -15,6 +17,7 @@
 namespace Cake\Test\TestCase\View\Widget;
 
 use Cake\TestSuite\TestCase;
+use Cake\View\Form\NullContext;
 use Cake\View\StringTemplate;
 use Cake\View\Widget\BasicWidget;
 
@@ -23,15 +26,14 @@ use Cake\View\Widget\BasicWidget;
  */
 class BasicWidgetTest extends TestCase
 {
-
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
         $templates = [
             'input' => '<input type="{{type}}" name="{{name}}"{{attrs}}>',
         ];
         $this->templates = new StringTemplate($templates);
-        $this->context = $this->getMockBuilder('Cake\View\Form\ContextInterface')->getMock();
+        $this->context = new NullContext([]);
     }
 
     /**
@@ -44,7 +46,7 @@ class BasicWidgetTest extends TestCase
         $text = new BasicWidget($this->templates);
         $result = $text->render(['name' => 'my_input'], $this->context);
         $expected = [
-            'input' => ['type' => 'text', 'name' => 'my_input']
+            'input' => ['type' => 'text', 'name' => 'my_input'],
         ];
         $this->assertHtml($expected, $result);
     }
@@ -63,7 +65,7 @@ class BasicWidgetTest extends TestCase
         ];
         $result = $text->render($data, $this->context);
         $expected = [
-            'input' => ['type' => 'email', 'name' => 'my_input']
+            'input' => ['type' => 'email', 'name' => 'my_input'],
         ];
         $this->assertHtml($expected, $result);
     }
@@ -79,15 +81,15 @@ class BasicWidgetTest extends TestCase
         $data = [
             'name' => 'my_input',
             'type' => 'email',
-            'val' => 'Some <value>'
+            'val' => 'Some <value>',
         ];
         $result = $text->render($data, $this->context);
         $expected = [
             'input' => [
                 'type' => 'email',
                 'name' => 'my_input',
-                'value' => 'Some &lt;value&gt;'
-            ]
+                'value' => 'Some &lt;value&gt;',
+            ],
         ];
         $this->assertHtml($expected, $result);
     }
@@ -104,7 +106,7 @@ class BasicWidgetTest extends TestCase
             'name' => 'my_input',
             'type' => 'email',
             'class' => 'form-control',
-            'required' => true
+            'required' => true,
         ];
         $result = $text->render($data, $this->context);
         $expected = [
@@ -113,7 +115,7 @@ class BasicWidgetTest extends TestCase
                 'name' => 'my_input',
                 'class' => 'form-control',
                 'required' => 'required',
-            ]
+            ],
         ];
         $this->assertHtml($expected, $result);
     }
@@ -133,7 +135,7 @@ class BasicWidgetTest extends TestCase
             'type' => 'email',
             'class' => 'form-control',
             'required' => true,
-            'templateVars' => ['help' => 'SOS']
+            'templateVars' => ['help' => 'SOS'],
         ];
         $result = $text->render($data, $this->context);
         $expected = [
@@ -143,7 +145,7 @@ class BasicWidgetTest extends TestCase
                 'class' => 'form-control',
                 'required' => 'required',
             ],
-            '<span', 'SOS', '/span'
+            '<span', 'SOS', '/span',
         ];
         $this->assertHtml($expected, $result);
     }

@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (http://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (http://cakefoundation.org)
@@ -17,10 +19,13 @@ namespace Cake\TestSuite\Constraint\Response;
  * StatusSuccess
  *
  * @internal
+ * @extends \Cake\TestSuite\Constraint\Response\StatusCodeBase<array<int, int>>
  */
 class StatusSuccess extends StatusCodeBase
 {
-
+    /**
+     * @var array<int, int>
+     */
     protected $code = [200, 308];
 
     /**
@@ -28,7 +33,7 @@ class StatusSuccess extends StatusCodeBase
      *
      * @return string
      */
-    public function toString()
+    public function toString(): string
     {
         return sprintf('%d is between 200 and 308', $this->response->getStatusCode());
     }

@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -15,14 +17,14 @@
 namespace Cake\Test\TestCase\Routing;
 
 use Cake\Core\Configure;
-use Cake\Core\Plugin;
 use Cake\Http\ServerRequest;
 use Cake\Http\ServerRequestFactory;
+use Cake\Routing\Route\Route;
 use Cake\Routing\RouteBuilder;
 use Cake\Routing\RouteCollection;
 use Cake\Routing\Router;
-use Cake\Routing\Route\Route;
 use Cake\TestSuite\TestCase;
+use InvalidArgumentException;
 use RuntimeException;
 
 /**
@@ -30,18 +32,16 @@ use RuntimeException;
  */
 class RouterTest extends TestCase
 {
-
     /**
      * setUp method
      *
      * @return void
      */
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
-        Configure::write('Routing', ['admin' => null, 'prefixes' => []]);
-        Router::fullBaseUrl('');
-        Configure::write('App.fullBaseUrl', 'http://localhost');
+        Configure::write('Routing', ['prefixes' => []]);
+        Router::reload();
     }
 
     /**
@@ -49,11 +49,10 @@ class RouterTest extends TestCase
      *
      * @return void
      */
-    public function tearDown()
+    public function tearDown(): void
     {
         parent::tearDown();
         $this->clearPlugins();
-        Router::reload();
         Router::defaultRouteClass('Cake\Routing\Route\Route');
     }
 
@@ -64,9 +63,12 @@ class RouterTest extends TestCase
      */
     public function testBaseUrl()
     {
-        $this->assertRegExp('/^http(s)?:\/\//', Router::url('/', true));
-        $this->assertRegExp('/^http(s)?:\/\//', Router::url(null, true));
-        $this->assertRegExp('/^http(s)?:\/\//', Router::url(['_full' => true]));
+        Router::scope('/', function (RouteBuilder $routes) {
+            $routes->fallbacks();
+        });
+        $this->assertMatchesRegularExpression('/^http(s)?:\/\//', Router::url('/', true));
+        $this->assertMatchesRegularExpression('/^http(s)?:\/\//', Router::url(null, true));
+        $this->assertMatchesRegularExpression('/^http(s)?:\/\//', Router::url(['controller' => 'Test', '_full' => true]));
     }
 
     /**
@@ -76,12 +78,15 @@ class RouterTest extends TestCase
      */
     public function testFullBaseURL()
     {
+        Router::scope('/', function (RouteBuilder $routes) {
+            $routes->fallbacks();
+        });
         Router::fullBaseUrl('http://example.com');
-        $this->assertEquals('http://example.com/', Router::url('/', true));
-        $this->assertEquals('http://example.com', Configure::read('App.fullBaseUrl'));
+        $this->assertSame('http://example.com/', Router::url('/', true));
+        $this->assertSame('http://example.com', Configure::read('App.fullBaseUrl'));
         Router::fullBaseUrl('https://example.com');
-        $this->assertEquals('https://example.com/', Router::url('/', true));
-        $this->assertEquals('https://example.com', Configure::read('App.fullBaseUrl'));
+        $this->assertSame('https://example.com/', Router::url('/', true));
+        $this->assertSame('https://example.com', Configure::read('App.fullBaseUrl'));
     }
 
     /**
@@ -94,7 +99,7 @@ class RouterTest extends TestCase
     {
         Configure::write('App.base', '/cakephp');
         Router::fullBaseUrl('http://example.com');
-        $this->assertEquals('http://example.com/cakephp/tasks', Router::url('/tasks', true));
+        $this->assertSame('http://example.com/cakephp/tasks', Router::url('/tasks', true));
     }
 
     /**
@@ -108,21 +113,23 @@ class RouterTest extends TestCase
         Configure::write('App.base', '/cakephp');
         Router::fullBaseUrl('http://example.com');
         Router::scope('/', function (RouteBuilder $routes) {
-            $routes->get('/:controller/:action', []);
+            $routes->get('/:controller', ['action' => 'index']);
         });
 
         $out = Router::url([
-            'controller' => 'tasks',
-            'action' => 'index'
+            'controller' => 'Tasks',
+            'action' => 'index',
+            '_method' => 'GET',
         ], true);
-        $this->assertEquals('http://example.com/cakephp/tasks', $out);
+        $this->assertSame('http://example.com/cakephp/Tasks', $out);
 
         $out = Router::url([
-            'controller' => 'tasks',
+            'controller' => 'Tasks',
             'action' => 'index',
-            '_base' => false
+            '_base' => false,
+            '_method' => 'GET',
         ], true);
-        $this->assertEquals('http://example.com/tasks', $out);
+        $this->assertSame('http://example.com/Tasks', $out);
     }
 
     /**
@@ -137,26 +144,33 @@ class RouterTest extends TestCase
             'params' => [
                 'action' => 'view',
                 'plugin' => null,
-                'controller' => 'pages',
-                'pass' => ['1']
+                'controller' => 'Pages',
+                'pass' => ['1'],
             ],
             'here' => '/cakephp',
             'url' => '/cakephp/pages/view/1',
         ]);
-        Router::setRequestInfo($request);
-        $this->assertEquals('http://example.com/cakephp/pages/view/1', Router::url(null, true));
-        $this->assertEquals('/cakephp/pages/view/1', Router::url());
+        Router::setRequest($request);
+        $this->assertSame('http://example.com/cakephp/pages/view/1', Router::url(null, true));
+        $this->assertSame('/cakephp/pages/view/1', Router::url());
     }
 
     /**
-     * testRouteDefaultParams method
+     * Test that full base URL can be generated from request context too if
+     * App.fullBaseUrl is not set.
      *
      * @return void
      */
-    public function testRouteDefaultParams()
+    public function testFullBaseURLFromRequest()
     {
-        Router::connect('/:controller', ['controller' => 'posts']);
-        $this->assertEquals(Router::url(['action' => 'index']), '/');
+        Configure::write('App.fullBaseUrl', false);
+        $server = [
+            'HTTP_HOST' => 'cake.local',
+        ];
+
+        $request = ServerRequestFactory::fromGlobals($server);
+        Router::setRequest($request);
+        $this->assertSame('http://cake.local', Router::fullBaseUrl());
     }
 
     /**
@@ -166,276 +180,10 @@ class RouterTest extends TestCase
      */
     public function testRouteExists()
     {
-        Router::connect('/:controller/:action', ['controller' => 'posts']);
-        $this->assertTrue(Router::routeExists(['action' => 'view']));
+        Router::connect('/posts/:action', ['controller' => 'Posts']);
+        $this->assertTrue(Router::routeExists(['controller' => 'Posts', 'action' => 'view']));
 
-        $this->assertFalse(Router::routeExists(['action' => 'view', 'controller' => 'users', 'plugin' => 'test']));
-    }
-
-    /**
-     * testMapResources method
-     *
-     * @group deprecated
-     * @return void
-     */
-    public function testMapResources()
-    {
-        $this->deprecated(function () {
-            Router::mapResources('Posts');
-
-            $expected = [
-                'pass' => [],
-                'plugin' => null,
-                'controller' => 'Posts',
-                'action' => 'index',
-                '_method' => 'GET',
-                '_matchedRoute' => '/posts',
-            ];
-            $result = Router::parse('/posts', 'GET');
-            $this->assertEquals($expected, $result);
-
-            $expected = [
-                'pass' => ['13'],
-                'plugin' => null,
-                'controller' => 'Posts',
-                'action' => 'view',
-                'id' => '13',
-                '_method' => 'GET',
-                '_matchedRoute' => '/posts/:id',
-            ];
-            $result = Router::parse('/posts/13', 'GET');
-            $this->assertEquals($expected, $result);
-
-            $expected = [
-                'pass' => [],
-                'plugin' => null,
-                'controller' => 'Posts',
-                'action' => 'add',
-                '_method' => 'POST',
-                '_matchedRoute' => '/posts',
-            ];
-            $result = Router::parse('/posts', 'POST');
-            $this->assertEquals($expected, $result);
-
-            $expected = [
-                'pass' => ['13'],
-                'plugin' => null,
-                'controller' => 'Posts',
-                'action' => 'edit',
-                'id' => '13',
-                '_method' => ['PUT', 'PATCH'],
-                '_matchedRoute' => '/posts/:id',
-            ];
-            $result = Router::parse('/posts/13', 'PUT');
-            $this->assertEquals($expected, $result);
-
-            $expected = [
-                'pass' => ['475acc39-a328-44d3-95fb-015000000000'],
-                'plugin' => null,
-                'controller' => 'Posts',
-                'action' => 'edit',
-                'id' => '475acc39-a328-44d3-95fb-015000000000',
-                '_method' => ['PUT', 'PATCH'],
-                '_matchedRoute' => '/posts/:id',
-            ];
-            $result = Router::parse('/posts/475acc39-a328-44d3-95fb-015000000000', 'PUT');
-            $this->assertEquals($expected, $result);
-
-            $expected = [
-                'pass' => ['13'],
-                'plugin' => null,
-                'controller' => 'Posts',
-                'action' => 'delete',
-                'id' => '13',
-                '_method' => 'DELETE',
-                '_matchedRoute' => '/posts/:id',
-            ];
-            $result = Router::parse('/posts/13', 'DELETE');
-            $this->assertEquals($expected, $result);
-
-            Router::reload();
-            Router::mapResources('Posts', ['id' => '[a-z0-9_]+']);
-
-            $expected = [
-                'pass' => ['add'],
-                'plugin' => null,
-                'controller' => 'Posts',
-                'action' => 'view',
-                'id' => 'add',
-                '_method' => 'GET',
-                '_matchedRoute' => '/posts/:id',
-            ];
-            $result = Router::parse('/posts/add', 'GET');
-            $this->assertEquals($expected, $result);
-
-            $expected = [
-                'pass' => ['name'],
-                'plugin' => null,
-                'controller' => 'Posts',
-                'action' => 'edit',
-                'id' => 'name',
-                '_method' => ['PUT', 'PATCH'],
-                '_matchedRoute' => '/posts/:id',
-            ];
-            $result = Router::parse('/posts/name', 'PUT');
-            $this->assertEquals($expected, $result);
-        });
-    }
-
-    /**
-     * testMapResources with plugin controllers.
-     *
-     * @group deprecated
-     * @return void
-     */
-    public function testPluginMapResources()
-    {
-        $this->deprecated(function () {
-            Router::mapResources('TestPlugin.TestPlugin');
-
-            $result = Router::parse('/test_plugin/test_plugin', 'GET');
-            $expected = [
-                'pass' => [],
-                'plugin' => 'TestPlugin',
-                'controller' => 'TestPlugin',
-                'action' => 'index',
-                '_method' => 'GET',
-                '_matchedRoute' => '/test_plugin/test_plugin',
-            ];
-            $this->assertEquals($expected, $result);
-
-            $result = Router::parse('/test_plugin/test_plugin/13', 'GET');
-            $expected = [
-                'pass' => ['13'],
-                'plugin' => 'TestPlugin',
-                'controller' => 'TestPlugin',
-                'action' => 'view',
-                'id' => '13',
-                '_method' => 'GET',
-                '_matchedRoute' => '/test_plugin/test_plugin/:id',
-            ];
-            $this->assertEquals($expected, $result);
-        });
-    }
-
-    /**
-     * Test mapResources with a prefix.
-     *
-     * @group deprecated
-     * @return void
-     */
-    public function testMapResourcesWithPrefix()
-    {
-        $this->deprecated(function () {
-            Router::mapResources('Posts', ['prefix' => 'api']);
-
-            $result = Router::parse('/api/posts', 'GET');
-
-            $expected = [
-                'plugin' => null,
-                'controller' => 'Posts',
-                'action' => 'index',
-                'pass' => [],
-                'prefix' => 'api',
-                '_method' => 'GET',
-                '_matchedRoute' => '/api/posts',
-            ];
-            $this->assertEquals($expected, $result);
-        });
-    }
-
-    /**
-     * Test mapResources with a default extension.
-     *
-     * @group deprecated
-     * @return void
-     */
-    public function testMapResourcesWithExtension()
-    {
-        $this->deprecated(function () {
-            Router::extensions(['json', 'xml'], false);
-            Router::mapResources('Posts', ['_ext' => 'json']);
-
-            $expected = [
-                'plugin' => null,
-                'controller' => 'Posts',
-                'action' => 'index',
-                'pass' => [],
-                '_method' => 'GET',
-                '_matchedRoute' => '/posts',
-            ];
-
-            $result = Router::parse('/posts', 'GET');
-            $this->assertEquals($expected, $result);
-
-            $result = Router::parse('/posts.json', 'GET');
-            $expected['_ext'] = 'json';
-            $this->assertEquals($expected, $result);
-
-            $result = Router::parse('/posts.xml', 'GET');
-            $this->assertArrayNotHasKey('_method', $result, 'Not an extension/resource route.');
-        });
-    }
-
-    /**
-     * testMapResources with custom connectOptions
-     *
-     * @group deprecated
-     */
-    public function testMapResourcesConnectOptions()
-    {
-        $this->deprecated(function () {
-            Plugin::load('TestPlugin');
-            Router::mapResources('Posts', [
-                'connectOptions' => [
-                    'routeClass' => 'TestPlugin.TestRoute',
-                    'foo' => '^(bar)$',
-                ],
-            ]);
-            $routes = Router::routes();
-            $route = $routes[0];
-            $this->assertInstanceOf('TestPlugin\Routing\Route\TestRoute', $route);
-            $this->assertEquals('^(bar)$', $route->options['foo']);
-        });
-    }
-
-    /**
-     * Test mapResources with a plugin and prefix.
-     *
-     * @group deprecated
-     * @return void
-     */
-    public function testPluginMapResourcesWithPrefix()
-    {
-        $this->deprecated(function () {
-            Router::mapResources('TestPlugin.TestPlugin', ['prefix' => 'api']);
-
-            $result = Router::parse('/api/test_plugin/test_plugin', 'GET');
-            $expected = [
-                'pass' => [],
-                'plugin' => 'TestPlugin',
-                'controller' => 'TestPlugin',
-                'prefix' => 'api',
-                'action' => 'index',
-                '_method' => 'GET',
-                '_matchedRoute' => '/api/test_plugin/test_plugin',
-            ];
-            $this->assertEquals($expected, $result);
-
-            $resources = Router::mapResources('Posts', ['prefix' => 'api']);
-
-            $result = Router::parse('/api/posts', 'GET');
-            $expected = [
-                'pass' => [],
-                'plugin' => null,
-                'controller' => 'Posts',
-                'action' => 'index',
-                '_method' => 'GET',
-                'prefix' => 'api',
-                '_matchedRoute' => '/api/posts',
-            ];
-            $this->assertEquals($expected, $result);
-        });
+        $this->assertFalse(Router::routeExists(['action' => 'view', 'controller' => 'Users', 'plugin' => 'test']));
     }
 
     /**
@@ -447,22 +195,22 @@ class RouterTest extends TestCase
     {
         Router::connect('/:controller', ['action' => 'index', '_method' => ['GET', 'POST']]);
 
-        $result = Router::parseRequest($this->makeRequest('/posts', 'GET'));
+        $result = Router::parseRequest($this->makeRequest('/Posts', 'GET'));
         $expected = [
             'pass' => [],
             'plugin' => null,
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'index',
             '_method' => ['GET', 'POST'],
             '_matchedRoute' => '/:controller',
         ];
         $this->assertEquals($expected, $result);
 
-        $result = Router::parseRequest($this->makeRequest('/posts', 'POST'));
+        $result = Router::parseRequest($this->makeRequest('/Posts', 'POST'));
         $expected = [
             'pass' => [],
             'plugin' => null,
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'index',
             '_method' => ['GET', 'POST'],
             '_matchedRoute' => '/:controller',
@@ -473,47 +221,56 @@ class RouterTest extends TestCase
     /**
      * testGenerateUrlResourceRoute method
      *
-     * @group deprecated
      * @return void
      */
     public function testGenerateUrlResourceRoute()
     {
-        $this->deprecated(function () {
-            Router::mapResources('Posts');
-
-            $result = Router::url([
-                'controller' => 'Posts',
-                'action' => 'index',
-                '_method' => 'GET'
-            ]);
-            $expected = '/posts';
-            $this->assertEquals($expected, $result);
-
-            $result = Router::url([
-                'controller' => 'Posts',
-                'action' => 'view',
-                '_method' => 'GET',
-                'id' => 10
-            ]);
-            $expected = '/posts/10';
-            $this->assertEquals($expected, $result);
-
-            $result = Router::url(['controller' => 'Posts', 'action' => 'add', '_method' => 'POST']);
-            $expected = '/posts';
-            $this->assertEquals($expected, $result);
-
-            $result = Router::url(['controller' => 'Posts', 'action' => 'edit', '_method' => 'PUT', 'id' => 10]);
-            $expected = '/posts/10';
-            $this->assertEquals($expected, $result);
-
-            $result = Router::url(['controller' => 'Posts', 'action' => 'delete', '_method' => 'DELETE', 'id' => 10]);
-            $expected = '/posts/10';
-            $this->assertEquals($expected, $result);
-
-            $result = Router::url(['controller' => 'Posts', 'action' => 'edit', '_method' => 'PATCH', 'id' => 10]);
-            $expected = '/posts/10';
-            $this->assertEquals($expected, $result);
+        Router::scope('/', function (RouteBuilder $routes) {
+            $routes->resources('Posts');
         });
+
+        $result = Router::url([
+            'controller' => 'Posts',
+            'action' => 'index',
+            '_method' => 'GET',
+        ]);
+        $expected = '/posts';
+        $this->assertSame($expected, $result);
+
+        $result = Router::url([
+            'controller' => 'Posts',
+            'action' => 'view',
+            '_method' => 'GET',
+            'id' => '10',
+        ]);
+        $expected = '/posts/10';
+        $this->assertSame($expected, $result);
+
+        $result = Router::url(['controller' => 'Posts', 'action' => 'add', '_method' => 'POST']);
+        $expected = '/posts';
+        $this->assertSame($expected, $result);
+
+        $result = Router::url(['controller' => 'Posts', 'action' => 'edit', '_method' => 'PUT', 'id' => '10']);
+        $expected = '/posts/10';
+        $this->assertSame($expected, $result);
+
+        $result = Router::url([
+            'controller' => 'Posts',
+            'action' => 'delete',
+            '_method' => 'DELETE',
+            'id' => '10',
+        ]);
+        $expected = '/posts/10';
+        $this->assertSame($expected, $result);
+
+        $result = Router::url([
+            'controller' => 'Posts',
+            'action' => 'edit',
+            '_method' => 'PATCH',
+            'id' => '10',
+        ]);
+        $expected = '/posts/10';
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -528,62 +285,63 @@ class RouterTest extends TestCase
         $expected = '/users/logout';
 
         $result = Router::normalize('/users/logout/');
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = Router::normalize('//users//logout//');
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = Router::normalize('users/logout');
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
-        $result = Router::normalize(['controller' => 'users', 'action' => 'logout']);
-        $this->assertEquals($expected, $result);
+        $expected = '/Users/logout';
+        $result = Router::normalize(['controller' => 'Users', 'action' => 'logout']);
+        $this->assertSame($expected, $result);
 
         $result = Router::normalize('/');
-        $this->assertEquals('/', $result);
+        $this->assertSame('/', $result);
 
         $result = Router::normalize('http://google.com/');
-        $this->assertEquals('http://google.com/', $result);
+        $this->assertSame('http://google.com/', $result);
 
         $result = Router::normalize('http://google.com//');
-        $this->assertEquals('http://google.com//', $result);
+        $this->assertSame('http://google.com//', $result);
 
         $result = Router::normalize('/users/login/scope://foo');
-        $this->assertEquals('/users/login/scope:/foo', $result);
+        $this->assertSame('/users/login/scope:/foo', $result);
 
         $result = Router::normalize('/recipe/recipes/add');
-        $this->assertEquals('/recipe/recipes/add', $result);
+        $this->assertSame('/recipe/recipes/add', $result);
 
         $request = new ServerRequest(['base' => '/us']);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
         $result = Router::normalize('/us/users/logout/');
-        $this->assertEquals('/users/logout', $result);
+        $this->assertSame('/users/logout', $result);
 
         Router::reload();
 
         $request = new ServerRequest(['base' => '/cake_12']);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
         $result = Router::normalize('/cake_12/users/logout/');
-        $this->assertEquals('/users/logout', $result);
+        $this->assertSame('/users/logout', $result);
 
         Router::reload();
         $_back = Configure::read('App.fullBaseUrl');
         Configure::write('App.fullBaseUrl', '/');
 
         $request = new ServerRequest();
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
         $result = Router::normalize('users/login');
-        $this->assertEquals('/users/login', $result);
+        $this->assertSame('/users/login', $result);
         Configure::write('App.fullBaseUrl', $_back);
 
         Router::reload();
         $request = new ServerRequest(['base' => 'beer']);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
         $result = Router::normalize('beer/admin/beers_tags/add');
-        $this->assertEquals('/admin/beers_tags/add', $result);
+        $this->assertSame('/admin/beers_tags/add', $result);
 
         $result = Router::normalize('/admin/beers_tags/add');
-        $this->assertEquals('/admin/beers_tags/add', $result);
+        $this->assertSame('/admin/beers_tags/add', $result);
     }
 
     /**
@@ -598,31 +356,34 @@ class RouterTest extends TestCase
             'params' => [
                 'action' => 'index',
                 'plugin' => null,
-                'controller' => 'subscribe',
+                'controller' => 'Subscribe',
             ],
             'url' => '/subscribe',
             'base' => '/magazine',
-            'webroot' => '/magazine/'
+            'webroot' => '/magazine/',
         ]);
-        Router::pushRequest($request);
+        Router::setRequest($request);
 
         $result = Router::url();
-        $this->assertEquals('/magazine/subscribe', $result);
+        $this->assertSame('/magazine/subscribe', $result);
 
         $result = Router::url([]);
-        $this->assertEquals('/magazine/subscribe', $result);
+        $this->assertSame('/magazine/subscribe', $result);
 
         $result = Router::url('/');
-        $this->assertEquals('/magazine/', $result);
+        $this->assertSame('/magazine/', $result);
 
         $result = Router::url('/articles/');
-        $this->assertEquals('/magazine/articles/', $result);
+        $this->assertSame('/magazine/articles/', $result);
+
+        $result = Router::url('/articles::index');
+        $this->assertSame('/magazine/articles::index', $result);
 
         $result = Router::url('/articles/view');
-        $this->assertEquals('/magazine/articles/view', $result);
+        $this->assertSame('/magazine/articles/view', $result);
 
-        $result = Router::url(['controller' => 'articles', 'action' => 'view', 1]);
-        $this->assertEquals('/magazine/articles/view/1', $result);
+        $result = Router::url(['controller' => 'Articles', 'action' => 'view', 1]);
+        $this->assertSame('/magazine/Articles/view/1', $result);
     }
 
     /**
@@ -644,13 +405,13 @@ class RouterTest extends TestCase
 
         Router::connect('/fallback', ['controller' => 'Articles'], ['_host' => '*.example.com']);
         $request = ServerRequestFactory::fromGlobals($server);
-        Router::setRequestContext($request);
+        Router::setRequest($request);
 
         $result = Router::url(['controller' => 'Articles', 'action' => 'index']);
-        $this->assertEquals('http://foo.example.com/subdir/fallback', $result);
+        $this->assertSame('http://foo.example.com/subdir/fallback', $result);
 
         $result = Router::url(['controller' => 'Articles', 'action' => 'index'], true);
-        $this->assertEquals('http://foo.example.com/subdir/fallback', $result);
+        $this->assertSame('http://foo.example.com/subdir/fallback', $result);
     }
 
     /**
@@ -660,13 +421,13 @@ class RouterTest extends TestCase
      */
     public function testUrlCatchAllRoute()
     {
-        Router::connect('/*', ['controller' => 'categories', 'action' => 'index']);
-        $result = Router::url(['controller' => 'categories', 'action' => 'index', '0']);
-        $this->assertEquals('/0', $result);
+        Router::connect('/*', ['controller' => 'Categories', 'action' => 'index']);
+        $result = Router::url(['controller' => 'Categories', 'action' => 'index', '0']);
+        $this->assertSame('/0', $result);
 
         $expected = [
             'plugin' => null,
-            'controller' => 'categories',
+            'controller' => 'Categories',
             'action' => 'index',
             'pass' => ['0'],
             '_matchedRoute' => '/*',
@@ -685,57 +446,64 @@ class RouterTest extends TestCase
      */
     public function testUrlGenerationBasic()
     {
+        /**
+         * @var string $ID
+         * @var string $UUID
+         * @var string $Year
+         * @var string $Month
+         * @var string $Action
+         */
         extract(Router::getNamedExpressions());
 
-        Router::connect('/', ['controller' => 'pages', 'action' => 'display', 'home']);
-        $out = Router::url(['controller' => 'pages', 'action' => 'display', 'home']);
-        $this->assertEquals('/', $out);
+        Router::connect('/', ['controller' => 'Pages', 'action' => 'display', 'home']);
+        $out = Router::url(['controller' => 'Pages', 'action' => 'display', 'home']);
+        $this->assertSame('/', $out);
 
-        Router::connect('/pages/*', ['controller' => 'pages', 'action' => 'display']);
-        $result = Router::url(['controller' => 'pages', 'action' => 'display', 'about']);
+        Router::connect('/pages/*', ['controller' => 'Pages', 'action' => 'display']);
+        $result = Router::url(['controller' => 'Pages', 'action' => 'display', 'about']);
         $expected = '/pages/about';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         Router::reload();
-        Router::connect('/:plugin/:id/*', ['controller' => 'posts', 'action' => 'view'], ['id' => $ID]);
+        Router::connect('/:plugin/:id/*', ['controller' => 'Posts', 'action' => 'view'], ['id' => $ID]);
 
         $result = Router::url([
-            'plugin' => 'cake_plugin',
-            'controller' => 'posts',
-            'action' => 'view',
-            'id' => '1'
-        ]);
-        $expected = '/cake_plugin/1';
-        $this->assertEquals($expected, $result);
-
-        $result = Router::url([
-            'plugin' => 'cake_plugin',
-            'controller' => 'posts',
+            'plugin' => 'CakePlugin',
+            'controller' => 'Posts',
             'action' => 'view',
             'id' => '1',
-            '0'
         ]);
-        $expected = '/cake_plugin/1/0';
-        $this->assertEquals($expected, $result);
+        $expected = '/CakePlugin/1';
+        $this->assertSame($expected, $result);
+
+        $result = Router::url([
+            'plugin' => 'CakePlugin',
+            'controller' => 'Posts',
+            'action' => 'view',
+            'id' => '1',
+            '0',
+        ]);
+        $expected = '/CakePlugin/1/0';
+        $this->assertSame($expected, $result);
 
         Router::reload();
         Router::connect('/:controller/:action/:id', [], ['id' => $ID]);
 
-        $result = Router::url(['controller' => 'posts', 'action' => 'view', 'id' => '1']);
-        $expected = '/posts/view/1';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['controller' => 'Posts', 'action' => 'view', 'id' => '1']);
+        $expected = '/Posts/view/1';
+        $this->assertSame($expected, $result);
 
         Router::reload();
         Router::connect('/:controller/:id', ['action' => 'view']);
 
-        $result = Router::url(['controller' => 'posts', 'action' => 'view', 'id' => '1']);
-        $expected = '/posts/1';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['controller' => 'Posts', 'action' => 'view', 'id' => '1']);
+        $expected = '/Posts/1';
+        $this->assertSame($expected, $result);
 
-        Router::connect('/view/*', ['controller' => 'posts', 'action' => 'view']);
-        $result = Router::url(['controller' => 'posts', 'action' => 'view', '1']);
+        Router::connect('/view/*', ['controller' => 'Posts', 'action' => 'view']);
+        $result = Router::url(['controller' => 'Posts', 'action' => 'view', '1']);
         $expected = '/view/1';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         Router::reload();
         Router::connect('/:controller/:action');
@@ -743,41 +511,41 @@ class RouterTest extends TestCase
             'params' => [
                 'action' => 'index',
                 'plugin' => null,
-                'controller' => 'users',
-            ]
+                'controller' => 'Users',
+            ],
         ]);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
 
         $result = Router::url(['action' => 'login']);
-        $expected = '/users/login';
-        $this->assertEquals($expected, $result);
+        $expected = '/Users/login';
+        $this->assertSame($expected, $result);
 
         Router::reload();
-        Router::connect('/contact/:action', ['plugin' => 'contact', 'controller' => 'contact']);
+        Router::connect('/contact/:action', ['plugin' => 'Contact', 'controller' => 'Contact']);
 
         $result = Router::url([
-            'plugin' => 'contact',
-            'controller' => 'contact',
-            'action' => 'me'
+            'plugin' => 'Contact',
+            'controller' => 'Contact',
+            'action' => 'me',
         ]);
 
         $expected = '/contact/me';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         Router::reload();
         Router::connect('/:controller', ['action' => 'index']);
         $request = new ServerRequest([
             'params' => [
                 'action' => 'index',
-                'plugin' => 'myplugin',
-                'controller' => 'mycontroller',
-            ]
+                'plugin' => 'Myplugin',
+                'controller' => 'Mycontroller',
+            ],
         ]);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
 
-        $result = Router::url(['plugin' => null, 'controller' => 'myothercontroller']);
-        $expected = '/myothercontroller';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['plugin' => null, 'controller' => 'Myothercontroller']);
+        $expected = '/Myothercontroller';
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -791,7 +559,7 @@ class RouterTest extends TestCase
         Router::connect('/:controller/:action/*', [], ['routeClass' => 'InflectedRoute']);
         $result = Router::url(['controller' => 'Articles', 'action' => 'view', 'id' => 10]);
         $expected = '/articles/10';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -804,27 +572,27 @@ class RouterTest extends TestCase
         Router::connect('/:controller/:action/*');
 
         $result = Router::url([
-            'controller' => 'posts',
+            'controller' => 'Posts',
             '0',
-            '?' => ['var' => 'test', 'var2' => 'test2']
+            '?' => ['var' => 'test', 'var2' => 'test2'],
         ]);
-        $expected = '/posts/index/0?var=test&var2=test2';
-        $this->assertEquals($expected, $result);
+        $expected = '/Posts/index/0?var=test&var2=test2';
+        $this->assertSame($expected, $result);
 
-        $result = Router::url(['controller' => 'posts', '0', '?' => ['var' => null]]);
-        $this->assertEquals('/posts/index/0', $result);
+        $result = Router::url(['controller' => 'Posts', '0', '?' => ['var' => null]]);
+        $this->assertSame('/Posts/index/0', $result);
 
         $result = Router::url([
-            'controller' => 'posts',
+            'controller' => 'Posts',
             '0',
             '?' => [
                 'var' => 'test',
-                'var2' => 'test2'
+                'var2' => 'test2',
             ],
-            '#' => 'unencoded string %'
+            '#' => 'unencoded string %',
         ]);
-        $expected = '/posts/index/0?var=test&var2=test2#unencoded string %';
-        $this->assertEquals($expected, $result);
+        $expected = '/Posts/index/0?var=test&var2=test2#unencoded string %';
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -836,7 +604,7 @@ class RouterTest extends TestCase
     {
         Router::connect(
             ':language/galleries',
-            ['controller' => 'galleries', 'action' => 'index'],
+            ['controller' => 'Galleries', 'action' => 'index'],
             ['language' => '[a-z]{3}']
         );
 
@@ -852,73 +620,73 @@ class RouterTest extends TestCase
             ['language' => '[a-z]{3}']
         );
 
-        $result = Router::url(['admin' => false, 'language' => 'dan', 'action' => 'index', 'controller' => 'galleries']);
+        $result = Router::url(['admin' => false, 'language' => 'dan', 'action' => 'index', 'controller' => 'Galleries']);
         $expected = '/dan/galleries';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
-        $result = Router::url(['admin' => false, 'language' => 'eng', 'action' => 'index', 'controller' => 'galleries']);
+        $result = Router::url(['admin' => false, 'language' => 'eng', 'action' => 'index', 'controller' => 'Galleries']);
         $expected = '/eng/galleries';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         Router::reload();
         Router::connect(
             '/:language/pages',
-            ['controller' => 'pages', 'action' => 'index'],
+            ['controller' => 'Pages', 'action' => 'index'],
             ['language' => '[a-z]{3}']
         );
         Router::connect('/:language/:controller/:action/*', [], ['language' => '[a-z]{3}']);
 
-        $result = Router::url(['language' => 'eng', 'action' => 'index', 'controller' => 'pages']);
+        $result = Router::url(['language' => 'eng', 'action' => 'index', 'controller' => 'Pages']);
         $expected = '/eng/pages';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
-        $result = Router::url(['language' => 'eng', 'controller' => 'pages']);
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['language' => 'eng', 'controller' => 'Pages']);
+        $this->assertSame($expected, $result);
 
-        $result = Router::url(['language' => 'eng', 'controller' => 'pages', 'action' => 'add']);
-        $expected = '/eng/pages/add';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['language' => 'eng', 'controller' => 'Pages', 'action' => 'add']);
+        $expected = '/eng/Pages/add';
+        $this->assertSame($expected, $result);
 
         Router::reload();
         Router::connect(
             '/forestillinger/:month/:year/*',
-            ['plugin' => 'shows', 'controller' => 'shows', 'action' => 'calendar'],
+            ['plugin' => 'Shows', 'controller' => 'Shows', 'action' => 'calendar'],
             ['month' => '0[1-9]|1[012]', 'year' => '[12][0-9]{3}']
         );
 
         $result = Router::url([
-            'plugin' => 'shows',
-            'controller' => 'shows',
+            'plugin' => 'Shows',
+            'controller' => 'Shows',
             'action' => 'calendar',
-            'month' => 10,
-            'year' => 2007,
-            'min-forestilling'
+            'month' => '10',
+            'year' => '2007',
+            'min-forestilling',
         ]);
         $expected = '/forestillinger/10/2007/min-forestilling';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         Router::reload();
         Router::connect(
             '/kalender/:month/:year/*',
-            ['plugin' => 'shows', 'controller' => 'shows', 'action' => 'calendar'],
+            ['plugin' => 'Shows', 'controller' => 'Shows', 'action' => 'calendar'],
             ['month' => '0[1-9]|1[012]', 'year' => '[12][0-9]{3}']
         );
-        Router::connect('/kalender/*', ['plugin' => 'shows', 'controller' => 'shows', 'action' => 'calendar']);
+        Router::connect('/kalender/*', ['plugin' => 'Shows', 'controller' => 'Shows', 'action' => 'calendar']);
 
-        $result = Router::url(['plugin' => 'shows', 'controller' => 'shows', 'action' => 'calendar', 'min-forestilling']);
+        $result = Router::url(['plugin' => 'Shows', 'controller' => 'Shows', 'action' => 'calendar', 'min-forestilling']);
         $expected = '/kalender/min-forestilling';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = Router::url([
-            'plugin' => 'shows',
-            'controller' => 'shows',
+            'plugin' => 'Shows',
+            'controller' => 'Shows',
             'action' => 'calendar',
-            'year' => 2007,
-            'month' => 10,
-            'min-forestilling'
+            'year' => '2007',
+            'month' => '10',
+            'min-forestilling',
         ]);
         $expected = '/kalender/10/2007/min-forestilling';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -930,171 +698,171 @@ class RouterTest extends TestCase
     {
         Router::reload();
 
-        Router::connect('/pages/*', ['controller' => 'pages', 'action' => 'display']);
-        Router::connect('/reset/*', ['admin' => true, 'controller' => 'users', 'action' => 'reset']);
-        Router::connect('/tests', ['controller' => 'tests', 'action' => 'index']);
-        Router::connect('/admin/:controller/:action/*', ['prefix' => 'admin']);
+        Router::connect('/pages/*', ['controller' => 'Pages', 'action' => 'display']);
+        Router::connect('/reset/*', ['admin' => true, 'controller' => 'Users', 'action' => 'reset']);
+        Router::connect('/tests', ['controller' => 'Tests', 'action' => 'index']);
+        Router::connect('/admin/:controller/:action/*', ['prefix' => 'Admin']);
         Router::extensions('rss', false);
 
         $request = new ServerRequest([
             'params' => [
-                'controller' => 'registrations',
-                'action' => 'admin_index',
+                'controller' => 'Registrations',
+                'action' => 'index',
                 'plugin' => null,
-                'prefix' => 'admin',
-                '_ext' => 'html'
+                'prefix' => 'Admin',
+                '_ext' => 'html',
             ],
             'url' => '/admin/registrations/index',
         ]);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
 
         $result = Router::url([]);
         $expected = '/admin/registrations/index';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         Router::reload();
-        Router::connect('/admin/subscriptions/:action/*', ['controller' => 'subscribe', 'prefix' => 'admin']);
-        Router::connect('/admin/:controller/:action/*', ['prefix' => 'admin']);
+        Router::connect('/admin/subscriptions/:action/*', ['controller' => 'Subscribe', 'prefix' => 'Admin']);
+        Router::connect('/admin/:controller/:action/*', ['prefix' => 'Admin']);
 
         $request = new ServerRequest([
             'params' => [
                 'action' => 'index',
                 'plugin' => null,
-                'controller' => 'subscribe',
-                'prefix' => 'admin',
+                'controller' => 'Subscribe',
+                'prefix' => 'Admin',
             ],
             'webroot' => '/magazine/',
             'base' => '/magazine',
             'url' => '/admin/subscriptions/edit/1',
         ]);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
 
         $result = Router::url(['action' => 'edit', 1]);
         $expected = '/magazine/admin/subscriptions/edit/1';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
-        $result = Router::url(['prefix' => 'admin', 'controller' => 'users', 'action' => 'login']);
-        $expected = '/magazine/admin/users/login';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['prefix' => 'Admin', 'controller' => 'Users', 'action' => 'login']);
+        $expected = '/magazine/admin/Users/login';
+        $this->assertSame($expected, $result);
 
         Router::reload();
         $request = new ServerRequest([
             'params' => [
-                'prefix' => 'admin',
+                'prefix' => 'Admin',
                 'action' => 'index',
                 'plugin' => null,
-                'controller' => 'users',
+                'controller' => 'Users',
             ],
             'webroot' => '/',
             'url' => '/admin/users/index',
         ]);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
 
-        Router::connect('/page/*', ['controller' => 'pages', 'action' => 'view', 'prefix' => 'admin']);
+        Router::connect('/page/*', ['controller' => 'Pages', 'action' => 'view', 'prefix' => 'Admin']);
 
-        $result = Router::url(['prefix' => 'admin', 'controller' => 'pages', 'action' => 'view', 'my-page']);
+        $result = Router::url(['prefix' => 'Admin', 'controller' => 'Pages', 'action' => 'view', 'my-page']);
         $expected = '/page/my-page';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         Router::reload();
-        Router::connect('/admin/:controller/:action/*', ['prefix' => 'admin']);
+        Router::connect('/admin/:controller/:action/*', ['prefix' => 'Admin']);
 
         $request = new ServerRequest([
             'params' => [
                 'plugin' => null,
-                'controller' => 'pages',
+                'controller' => 'Pages',
                 'action' => 'add',
-                'prefix' => 'admin'
+                'prefix' => 'Admin',
             ],
             'webroot' => '/',
             'url' => '/admin/pages/add',
         ]);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
 
-        $result = Router::url(['plugin' => null, 'controller' => 'pages', 'action' => 'add', 'id' => false]);
-        $expected = '/admin/pages/add';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['plugin' => null, 'controller' => 'Pages', 'action' => 'add', 'id' => false]);
+        $expected = '/admin/Pages/add';
+        $this->assertSame($expected, $result);
 
         Router::reload();
-        Router::connect('/admin/:controller/:action/*', ['prefix' => 'admin']);
+        Router::connect('/admin/:controller/:action/*', ['prefix' => 'Admin']);
         $request = new ServerRequest([
             'params' => [
                 'plugin' => null,
-                'controller' => 'pages',
+                'controller' => 'Pages',
                 'action' => 'add',
-                'prefix' => 'admin'
+                'prefix' => 'Admin',
             ],
             'webroot' => '/',
             'url' => '/admin/pages/add',
         ]);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
 
-        $result = Router::url(['plugin' => null, 'controller' => 'pages', 'action' => 'add', 'id' => false]);
-        $expected = '/admin/pages/add';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['plugin' => null, 'controller' => 'Pages', 'action' => 'add', 'id' => false]);
+        $expected = '/admin/Pages/add';
+        $this->assertSame($expected, $result);
 
         Router::reload();
-        Router::connect('/admin/:controller/:action/:id', ['prefix' => 'admin'], ['id' => '[0-9]+']);
+        Router::connect('/admin/:controller/:action/:id', ['prefix' => 'Admin'], ['id' => '[0-9]+']);
         $request = new ServerRequest([
             'params' => [
                 'plugin' => null,
-                'controller' => 'pages',
+                'controller' => 'Pages',
                 'action' => 'edit',
                 'pass' => ['284'],
-                'prefix' => 'admin'
+                'prefix' => 'Admin',
             ],
             'url' => '/admin/pages/edit/284',
         ]);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
 
-        $result = Router::url(['plugin' => null, 'controller' => 'pages', 'action' => 'edit', 'id' => '284']);
-        $expected = '/admin/pages/edit/284';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['plugin' => null, 'controller' => 'Pages', 'action' => 'edit', 'id' => '284']);
+        $expected = '/admin/Pages/edit/284';
+        $this->assertSame($expected, $result);
 
         Router::reload();
-        Router::connect('/admin/:controller/:action/*', ['prefix' => 'admin']);
+        Router::connect('/admin/:controller/:action/*', ['prefix' => 'Admin']);
 
         $request = new ServerRequest([
             'params' => [
-                'plugin' => null, 'controller' => 'pages', 'action' => 'add', 'prefix' => 'admin',
+                'plugin' => null, 'controller' => 'Pages', 'action' => 'add', 'prefix' => 'Admin',
             ],
             'url' => '/admin/pages/add',
         ]);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
 
-        $result = Router::url(['plugin' => null, 'controller' => 'pages', 'action' => 'add', 'id' => false]);
-        $expected = '/admin/pages/add';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['plugin' => null, 'controller' => 'Pages', 'action' => 'add', 'id' => false]);
+        $expected = '/admin/Pages/add';
+        $this->assertSame($expected, $result);
 
         Router::reload();
-        Router::connect('/admin/:controller/:action/*', ['prefix' => 'admin']);
+        Router::connect('/admin/:controller/:action/*', ['prefix' => 'Admin']);
 
         $request = new ServerRequest([
             'params' => [
-                'plugin' => null, 'controller' => 'pages', 'action' => 'edit', 'prefix' => 'admin',
+                'plugin' => null, 'controller' => 'Pages', 'action' => 'edit', 'prefix' => 'Admin',
             ],
             'url' => '/admin/pages/edit/284',
         ]);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
 
-        $result = Router::url(['plugin' => null, 'controller' => 'pages', 'action' => 'edit', 284]);
-        $expected = '/admin/pages/edit/284';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['plugin' => null, 'controller' => 'Pages', 'action' => 'edit', 284]);
+        $expected = '/admin/Pages/edit/284';
+        $this->assertSame($expected, $result);
 
         Router::reload();
-        Router::connect('/admin/posts/*', ['controller' => 'posts', 'action' => 'index', 'prefix' => 'admin']);
+        Router::connect('/admin/posts/*', ['controller' => 'Posts', 'action' => 'index', 'prefix' => 'Admin']);
         $request = new ServerRequest([
             'params' => [
-                'plugin' => null, 'controller' => 'posts', 'action' => 'index', 'prefix' => 'admin',
-                'pass' => ['284']
+                'plugin' => null, 'controller' => 'Posts', 'action' => 'index', 'prefix' => 'Admin',
+                'pass' => ['284'],
             ],
             'url' => '/admin/pages/edit/284',
         ]);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
 
         $result = Router::url(['all']);
         $expected = '/admin/posts/all';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -1109,9 +877,15 @@ class RouterTest extends TestCase
                 $routes->fallbacks('InflectedRoute');
             });
         });
-        $result = Router::url(['prefix' => 'admin', 'plugin' => 'MyPlugin', 'controller' => 'Forms', 'action' => 'edit', 2]);
-        $expected = '/admin/my_plugin/forms/edit/2';
-        $this->assertEquals($expected, $result);
+        $result = Router::url([
+            'prefix' => 'Admin',
+            'plugin' => 'MyPlugin',
+            'controller' => 'Forms',
+            'action' => 'edit',
+            2,
+        ]);
+        $expected = '/admin/my-plugin/forms/edit/2';
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -1127,12 +901,12 @@ class RouterTest extends TestCase
             });
         });
         $result = Router::url([
-            'prefix' => 'admin/backoffice',
+            'prefix' => 'Admin/Backoffice',
             'controller' => 'Dashboards',
-            'action' => 'home'
+            'action' => 'home',
         ]);
         $expected = '/admin/backoffice/dashboards/home';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -1147,42 +921,42 @@ class RouterTest extends TestCase
 
         $result = Router::url([
             'plugin' => null,
-            'controller' => 'articles',
+            'controller' => 'Articles',
             'action' => 'add',
             'id' => null,
-            '_ext' => 'json'
+            '_ext' => 'json',
         ]);
-        $expected = '/articles/add.json';
-        $this->assertEquals($expected, $result);
+        $expected = '/Articles/add.json';
+        $this->assertSame($expected, $result);
 
         $result = Router::url([
             'plugin' => null,
-            'controller' => 'articles',
+            'controller' => 'Articles',
             'action' => 'add',
-            '_ext' => 'json'
+            '_ext' => 'json',
         ]);
-        $expected = '/articles/add.json';
-        $this->assertEquals($expected, $result);
+        $expected = '/Articles/add.json';
+        $this->assertSame($expected, $result);
 
         $result = Router::url([
             'plugin' => null,
-            'controller' => 'articles',
+            'controller' => 'Articles',
             'action' => 'index',
             'id' => null,
-            '_ext' => 'json'
+            '_ext' => 'json',
         ]);
-        $expected = '/articles.json';
-        $this->assertEquals($expected, $result);
+        $expected = '/Articles.json';
+        $this->assertSame($expected, $result);
 
         $result = Router::url([
             'plugin' => null,
-            'controller' => 'articles',
+            'controller' => 'Articles',
             'action' => 'index',
-            'id' => 'testing',
-            '_ext' => 'json'
+            '?' => ['id' => 'testing'],
+            '_ext' => 'json',
         ]);
-        $expected = '/articles.json?id=testing';
-        $this->assertEquals($expected, $result);
+        $expected = '/Articles.json?id=testing';
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -1193,30 +967,30 @@ class RouterTest extends TestCase
     public function testUrlGenerationWithExtensionInCurrentRequest()
     {
         Router::extensions('rss');
-        Router::scope('/', function ($r) {
+        Router::scope('/', function (RouteBuilder $r) {
             $r->fallbacks('InflectedRoute');
         });
         $request = new ServerRequest([
-            'params' => ['plugin' => null, 'controller' => 'Tasks', 'action' => 'index', '_ext' => 'rss']
+            'params' => ['plugin' => null, 'controller' => 'Tasks', 'action' => 'index', '_ext' => 'rss'],
         ]);
-        Router::pushRequest($request);
-
-        $result = Router::url([
-            'controller' => 'Tasks',
-            'action' => 'view',
-            1
-        ]);
-        $expected = '/tasks/view/1';
-        $this->assertEquals($expected, $result);
+        Router::setRequest($request);
 
         $result = Router::url([
             'controller' => 'Tasks',
             'action' => 'view',
             1,
-            '_ext' => 'json'
+        ]);
+        $expected = '/tasks/view/1';
+        $this->assertSame($expected, $result);
+
+        $result = Router::url([
+            'controller' => 'Tasks',
+            'action' => 'view',
+            1,
+            '_ext' => 'json',
         ]);
         $expected = '/tasks/view/1.json';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -1226,12 +1000,12 @@ class RouterTest extends TestCase
     {
         Router::connect(
             '/users',
-            ['controller' => 'users', 'action' => 'index'],
+            ['controller' => 'Users', 'action' => 'index'],
             ['_name' => 'users-index']
         );
         Router::connect(
             '/users/:name',
-            ['controller' => 'users', 'action' => 'view'],
+            ['controller' => 'Users', 'action' => 'view'],
             ['_name' => 'test']
         );
         Router::connect(
@@ -1241,25 +1015,25 @@ class RouterTest extends TestCase
         );
 
         $url = Router::url(['_name' => 'test', 'name' => 'mark']);
-        $this->assertEquals('/users/mark', $url);
+        $this->assertSame('/users/mark', $url);
 
         $url = Router::url([
             '_name' => 'test', 'name' => 'mark',
-            'page' => 1, 'sort' => 'title', 'dir' => 'desc'
+            '?' => ['page' => 1, 'sort' => 'title', 'dir' => 'desc', ],
         ]);
-        $this->assertEquals('/users/mark?page=1&sort=title&dir=desc', $url);
+        $this->assertSame('/users/mark?page=1&sort=title&dir=desc', $url);
 
         $url = Router::url(['_name' => 'Articles::view']);
-        $this->assertEquals('/view/', $url);
+        $this->assertSame('/view/', $url);
 
         $url = Router::url(['_name' => 'Articles::view', '1']);
-        $this->assertEquals('/view/1', $url);
+        $this->assertSame('/view/1', $url);
 
         $url = Router::url(['_name' => 'Articles::view', '_full' => true, '1']);
-        $this->assertEquals('http://localhost/view/1', $url);
+        $this->assertSame('http://localhost/view/1', $url);
 
         $url = Router::url(['_name' => 'Articles::view', '1', '#' => 'frag']);
-        $this->assertEquals('/view/1#frag', $url);
+        $this->assertSame('/view/1#frag', $url);
     }
 
     /**
@@ -1272,7 +1046,7 @@ class RouterTest extends TestCase
         $this->expectException(\Cake\Routing\Exception\MissingRouteException::class);
         Router::connect(
             '/users/:name',
-            ['controller' => 'users', 'action' => 'view'],
+            ['controller' => 'Users', 'action' => 'view'],
             ['_name' => 'test']
         );
         $url = Router::url(['_name' => 'junk', 'name' => 'mark']);
@@ -1288,17 +1062,17 @@ class RouterTest extends TestCase
         $this->expectException(\Cake\Routing\Exception\DuplicateNamedRouteException::class);
         Router::connect(
             '/users/:name',
-            ['controller' => 'users', 'action' => 'view'],
+            ['controller' => 'Users', 'action' => 'view'],
             ['_name' => 'test']
         );
         Router::connect(
             '/users/:name',
-            ['controller' => 'users', 'action' => 'view'],
+            ['controller' => 'Users', 'action' => 'view'],
             ['_name' => 'otherName']
         );
         Router::connect(
             '/users/:name',
-            ['controller' => 'users', 'action' => 'view'],
+            ['controller' => 'Users', 'action' => 'view'],
             ['_name' => 'test']
         );
     }
@@ -1315,11 +1089,11 @@ class RouterTest extends TestCase
             'params' => [
                 'plugin' => null,
                 'lang' => 'en',
-                'controller' => 'posts',
-                'action' => 'index'
-            ]
+                'controller' => 'Posts',
+                'action' => 'index',
+            ],
         ]);
-        Router::pushRequest($request);
+        Router::setRequest($request);
 
         $calledCount = 0;
         Router::addUrlFilter(function ($url, $request) use (&$calledCount) {
@@ -1334,9 +1108,9 @@ class RouterTest extends TestCase
 
             return $url;
         });
-        $result = Router::url(['controller' => 'tasks', 'action' => 'edit']);
-        $this->assertEquals('/en/tasks/edit/1234', $result);
-        $this->assertEquals(2, $calledCount);
+        $result = Router::url(['controller' => 'Tasks', 'action' => 'edit']);
+        $this->assertSame('/en/Tasks/edit/1234', $result);
+        $this->assertSame(2, $calledCount);
     }
 
     /**
@@ -1347,7 +1121,7 @@ class RouterTest extends TestCase
     public function testUrlGenerationWithUrlFilterFailureClosure()
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessageRegExp(
+        $this->expectExceptionMessageMatches(
             '/URL filter defined in .*RouterTest\.php on line \d+ could not be applied\.' .
             ' The filter failed with: nope/'
         );
@@ -1356,16 +1130,16 @@ class RouterTest extends TestCase
             'params' => [
                 'plugin' => null,
                 'lang' => 'en',
-                'controller' => 'posts',
-                'action' => 'index'
-            ]
+                'controller' => 'Posts',
+                'action' => 'index',
+            ],
         ]);
-        Router::pushRequest($request);
+        Router::setRequest($request);
 
         Router::addUrlFilter(function ($url, $request) {
             throw new RuntimeException('nope');
         });
-        Router::url(['controller' => 'posts', 'action' => 'index', 'lang' => 'en']);
+        Router::url(['controller' => 'Posts', 'action' => 'index', 'lang' => 'en']);
     }
 
     /**
@@ -1376,7 +1150,7 @@ class RouterTest extends TestCase
     public function testUrlGenerationWithUrlFilterFailureMethod()
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessageRegExp(
+        $this->expectExceptionMessageMatches(
             '/URL filter defined in .*RouterTest\.php on line \d+ could not be applied\.' .
             ' The filter failed with: /'
         );
@@ -1385,14 +1159,14 @@ class RouterTest extends TestCase
             'params' => [
                 'plugin' => null,
                 'lang' => 'en',
-                'controller' => 'posts',
-                'action' => 'index'
-            ]
+                'controller' => 'Posts',
+                'action' => 'index',
+            ],
         ]);
-        Router::pushRequest($request);
+        Router::setRequest($request);
 
         Router::addUrlFilter([$this, 'badFilter']);
-        Router::url(['controller' => 'posts', 'action' => 'index', 'lang' => 'en']);
+        Router::url(['controller' => 'Posts', 'action' => 'index', 'lang' => 'en']);
     }
 
     /**
@@ -1418,14 +1192,14 @@ class RouterTest extends TestCase
             'params' => [
                 'plugin' => null,
                 'lang' => 'en',
-                'controller' => 'posts',
-                'action' => 'index'
-            ]
+                'controller' => 'Posts',
+                'action' => 'index',
+            ],
         ]);
-        Router::pushRequest($request);
+        Router::setRequest($request);
 
-        $result = Router::url(['controller' => 'tasks', 'action' => 'edit', '1234']);
-        $this->assertEquals('/en/tasks/edit/1234', $result);
+        $result = Router::url(['controller' => 'Tasks', 'action' => 'edit', '1234']);
+        $this->assertSame('/en/Tasks/edit/1234', $result);
     }
 
     /**
@@ -1437,15 +1211,15 @@ class RouterTest extends TestCase
     {
         $mailto = 'mailto:mark@example.com';
         $result = Router::url($mailto);
-        $this->assertEquals($mailto, $result);
+        $this->assertSame($mailto, $result);
 
         $js = 'javascript:alert("hi")';
         $result = Router::url($js);
-        $this->assertEquals($js, $result);
+        $this->assertSame($js, $result);
 
         $hash = '#first';
         $result = Router::url($hash);
-        $this->assertEquals($hash, $result);
+        $this->assertSame($hash, $result);
     }
 
     /**
@@ -1455,21 +1229,21 @@ class RouterTest extends TestCase
      */
     public function testCanLeavePlugin()
     {
-        Router::connect('/admin/:controller', ['action' => 'index', 'prefix' => 'admin']);
-        Router::connect('/admin/:controller/:action/*', ['prefix' => 'admin']);
+        Router::connect('/admin/:controller', ['action' => 'index', 'prefix' => 'Admin']);
+        Router::connect('/admin/:controller/:action/*', ['prefix' => 'Admin']);
         $request = new ServerRequest([
             'url' => '/admin/this/interesting/index',
             'params' => [
                 'pass' => [],
-                'prefix' => 'admin',
+                'prefix' => 'Admin',
                 'plugin' => 'this',
                 'action' => 'index',
-                'controller' => 'interesting',
-            ]
+                'controller' => 'Interesting',
+            ],
         ]);
-        Router::setRequestInfo($request);
-        $result = Router::url(['plugin' => null, 'controller' => 'posts', 'action' => 'index']);
-        $this->assertEquals('/admin/posts', $result);
+        Router::setRequest($request);
+        $result = Router::url(['plugin' => null, 'controller' => 'Posts', 'action' => 'index']);
+        $this->assertSame('/admin/Posts', $result);
     }
 
     /**
@@ -1479,6 +1253,13 @@ class RouterTest extends TestCase
      */
     public function testUrlParsing()
     {
+        /**
+         * @var string $ID
+         * @var string $UUID
+         * @var string $Year
+         * @var string $Month
+         * @var string $Action
+         */
         extract(Router::getNamedExpressions());
 
         Router::connect(
@@ -1502,7 +1283,7 @@ class RouterTest extends TestCase
         Router::reload();
         Router::connect(
             '/posts/:year/:month/:day/*',
-            ['controller' => 'posts', 'action' => 'view'],
+            ['controller' => 'Posts', 'action' => 'view'],
             ['year' => $Year, 'month' => $Month, 'day' => $Day]
         );
         $result = Router::parseRequest($this->makeRequest('/posts/2007/08/01/title-of-post-here', 'GET'));
@@ -1510,7 +1291,7 @@ class RouterTest extends TestCase
             'year' => '2007',
             'month' => '08',
             'day' => '01',
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'view',
             'plugin' => null,
             'pass' => ['0' => 'title-of-post-here'],
@@ -1521,7 +1302,7 @@ class RouterTest extends TestCase
         Router::reload();
         Router::connect(
             '/posts/:day/:year/:month/*',
-            ['controller' => 'posts', 'action' => 'view'],
+            ['controller' => 'Posts', 'action' => 'view'],
             ['year' => $Year, 'month' => $Month, 'day' => $Day]
         );
         $result = Router::parseRequest($this->makeRequest('/posts/01/2007/08/title-of-post-here', 'GET'));
@@ -1529,7 +1310,7 @@ class RouterTest extends TestCase
             'day' => '01',
             'year' => '2007',
             'month' => '08',
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'view',
             'plugin' => null,
             'pass' => ['0' => 'title-of-post-here'],
@@ -1540,7 +1321,7 @@ class RouterTest extends TestCase
         Router::reload();
         Router::connect(
             '/posts/:month/:day/:year/*',
-            ['controller' => 'posts', 'action' => 'view'],
+            ['controller' => 'Posts', 'action' => 'view'],
             ['year' => $Year, 'month' => $Month, 'day' => $Day]
         );
         $result = Router::parseRequest($this->makeRequest('/posts/08/01/2007/title-of-post-here', 'GET'));
@@ -1548,25 +1329,25 @@ class RouterTest extends TestCase
             'month' => '08',
             'day' => '01',
             'year' => '2007',
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'view',
             'plugin' => null,
             'pass' => ['0' => 'title-of-post-here'],
-            '_matchedRoute' => '/posts/:month/:day/:year/*'
+            '_matchedRoute' => '/posts/:month/:day/:year/*',
         ];
         $this->assertEquals($expected, $result);
 
         Router::reload();
         Router::connect(
             '/posts/:year/:month/:day/*',
-            ['controller' => 'posts', 'action' => 'view']
+            ['controller' => 'Posts', 'action' => 'view']
         );
         $result = Router::parseRequest($this->makeRequest('/posts/2007/08/01/title-of-post-here', 'GET'));
         $expected = [
             'year' => '2007',
             'month' => '08',
             'day' => '01',
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'view',
             'plugin' => null,
             'pass' => ['0' => 'title-of-post-here'],
@@ -1582,7 +1363,7 @@ class RouterTest extends TestCase
             'pass' => ['home'],
             'controller' => 'Pages',
             'action' => 'display',
-            '_matchedRoute' => '/:controller/:action/*',
+            '_matchedRoute' => '/{controller}/{action}/*',
         ];
         $this->assertEquals($expected, $result);
 
@@ -1593,12 +1374,12 @@ class RouterTest extends TestCase
         $this->assertEquals($expected, $result);
 
         Router::reload();
-        Router::connect('/page/*', ['controller' => 'test']);
+        Router::connect('/page/*', ['controller' => 'Test']);
         $result = Router::parseRequest($this->makeRequest('/page/my-page', 'GET'));
         $expected = [
             'pass' => ['my-page'],
             'plugin' => null,
-            'controller' => 'test',
+            'controller' => 'Test',
             'action' => 'index',
             '_matchedRoute' => '/page/*',
         ];
@@ -1607,15 +1388,15 @@ class RouterTest extends TestCase
         Router::reload();
         Router::connect(
             '/:language/contact',
-            ['language' => 'eng', 'plugin' => 'contact', 'controller' => 'contact', 'action' => 'index'],
+            ['language' => 'eng', 'plugin' => 'Contact', 'controller' => 'Contact', 'action' => 'index'],
             ['language' => '[a-z]{3}']
         );
         $result = Router::parseRequest($this->makeRequest('/eng/contact', 'GET'));
         $expected = [
             'pass' => [],
             'language' => 'eng',
-            'plugin' => 'contact',
-            'controller' => 'contact',
+            'plugin' => 'Contact',
+            'controller' => 'Contact',
             'action' => 'index',
             '_matchedRoute' => '/:language/contact',
         ];
@@ -1624,39 +1405,39 @@ class RouterTest extends TestCase
         Router::reload();
         Router::connect(
             '/forestillinger/:month/:year/*',
-            ['plugin' => 'shows', 'controller' => 'shows', 'action' => 'calendar'],
+            ['plugin' => 'Shows', 'controller' => 'Shows', 'action' => 'calendar'],
             ['month' => '0[1-9]|1[012]', 'year' => '[12][0-9]{3}']
         );
 
         $result = Router::parseRequest($this->makeRequest('/forestillinger/10/2007/min-forestilling', 'GET'));
         $expected = [
             'pass' => ['min-forestilling'],
-            'plugin' => 'shows',
-            'controller' => 'shows',
+            'plugin' => 'Shows',
+            'controller' => 'Shows',
             'action' => 'calendar',
             'year' => 2007,
             'month' => 10,
-            '_matchedRoute' => '/forestillinger/:month/:year/*'
+            '_matchedRoute' => '/forestillinger/:month/:year/*',
         ];
         $this->assertEquals($expected, $result);
 
         Router::reload();
         Router::connect('/:controller/:action/*');
-        Router::connect('/', ['plugin' => 'pages', 'controller' => 'pages', 'action' => 'display']);
+        Router::connect('/', ['plugin' => 'pages', 'controller' => 'Pages', 'action' => 'display']);
         $result = Router::parseRequest($this->makeRequest('/', 'GET'));
         $expected = [
             'pass' => [],
-            'controller' => 'pages',
+            'controller' => 'Pages',
             'action' => 'display',
             'plugin' => 'pages',
             '_matchedRoute' => '/',
         ];
         $this->assertEquals($expected, $result);
 
-        $result = Router::parseRequest($this->makeRequest('/posts/edit/0', 'GET'));
+        $result = Router::parseRequest($this->makeRequest('/Posts/edit/0', 'GET'));
         $expected = [
             'pass' => [0],
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'edit',
             'plugin' => null,
             '_matchedRoute' => '/:controller/:action/*',
@@ -1665,47 +1446,47 @@ class RouterTest extends TestCase
 
         Router::reload();
         Router::connect(
-            '/posts/:id::url_title',
-            ['controller' => 'posts', 'action' => 'view'],
+            '/Posts/:id::url_title',
+            ['controller' => 'Posts', 'action' => 'view'],
             ['pass' => ['id', 'url_title'], 'id' => '[\d]+']
         );
-        $result = Router::parseRequest($this->makeRequest('/posts/5:sample-post-title', 'GET'));
+        $result = Router::parseRequest($this->makeRequest('/Posts/5:sample-post-title', 'GET'));
         $expected = [
             'pass' => ['5', 'sample-post-title'],
-            'id' => 5,
+            'id' => '5',
             'url_title' => 'sample-post-title',
             'plugin' => null,
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'view',
-            '_matchedRoute' => '/posts/:id::url_title',
+            '_matchedRoute' => '/Posts/:id::url_title',
         ];
         $this->assertEquals($expected, $result);
 
         Router::reload();
         Router::connect(
-            '/posts/:id::url_title/*',
-            ['controller' => 'posts', 'action' => 'view'],
+            '/Posts/:id::url_title/*',
+            ['controller' => 'Posts', 'action' => 'view'],
             ['pass' => ['id', 'url_title'], 'id' => '[\d]+']
         );
-        $result = Router::parseRequest($this->makeRequest('/posts/5:sample-post-title/other/params/4', 'GET'));
+        $result = Router::parseRequest($this->makeRequest('/Posts/5:sample-post-title/other/params/4', 'GET'));
         $expected = [
             'pass' => ['5', 'sample-post-title', 'other', 'params', '4'],
             'id' => 5,
             'url_title' => 'sample-post-title',
             'plugin' => null,
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'view',
-            '_matchedRoute' => '/posts/:id::url_title/*',
+            '_matchedRoute' => '/Posts/:id::url_title/*',
         ];
         $this->assertEquals($expected, $result);
 
         Router::reload();
-        Router::connect('/posts/view/*', ['controller' => 'posts', 'action' => 'view']);
+        Router::connect('/posts/view/*', ['controller' => 'Posts', 'action' => 'view']);
         $result = Router::parseRequest($this->makeRequest('/posts/view/10?id=123&tab=abc', 'GET'));
         $expected = [
             'pass' => [10],
             'plugin' => null,
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'view',
             '?' => ['id' => '123', 'tab' => 'abc'],
             '_matchedRoute' => '/posts/view/*',
@@ -1715,7 +1496,7 @@ class RouterTest extends TestCase
         Router::reload();
         Router::connect(
             '/posts/:url_title-(uuid::id)',
-            ['controller' => 'posts', 'action' => 'view'],
+            ['controller' => 'Posts', 'action' => 'view'],
             ['pass' => ['id', 'url_title'], 'id' => $UUID]
         );
         $result = Router::parseRequest($this->makeRequest('/posts/sample-post-title-(uuid:47fc97a9-019c-41d1-a058-1fa3cbdd56cb)', 'GET'));
@@ -1724,19 +1505,19 @@ class RouterTest extends TestCase
             'id' => '47fc97a9-019c-41d1-a058-1fa3cbdd56cb',
             'url_title' => 'sample-post-title',
             'plugin' => null,
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'view',
             '_matchedRoute' => '/posts/:url_title-(uuid::id)',
         ];
         $this->assertEquals($expected, $result);
 
         Router::reload();
-        Router::connect('/posts/view/*', ['controller' => 'posts', 'action' => 'view']);
+        Router::connect('/posts/view/*', ['controller' => 'Posts', 'action' => 'view']);
         $result = Router::parseRequest($this->makeRequest('/posts/view/foo:bar/routing:fun', 'GET'));
         $expected = [
             'pass' => ['foo:bar', 'routing:fun'],
             'plugin' => null,
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'view',
             '_matchedRoute' => '/posts/view/*',
         ];
@@ -1772,7 +1553,7 @@ class RouterTest extends TestCase
     {
         Router::connect(
             '/subjects/add/:category_id',
-            ['controller' => 'subjects', 'action' => 'add'],
+            ['controller' => 'Subjects', 'action' => 'add'],
             ['category_id' => '\w{8}-\w{4}-\w{4}-\w{4}-\w{12}']
         );
         $result = Router::parseRequest($this->makeRequest('/subjects/add/4795d601-19c8-49a6-930e-06a8b01d17b7', 'GET'));
@@ -1780,9 +1561,9 @@ class RouterTest extends TestCase
             'pass' => [],
             'category_id' => '4795d601-19c8-49a6-930e-06a8b01d17b7',
             'plugin' => null,
-            'controller' => 'subjects',
+            'controller' => 'Subjects',
             'action' => 'add',
-            '_matchedRoute' => '/subjects/add/:category_id'
+            '_matchedRoute' => '/subjects/add/:category_id',
         ];
         $this->assertEquals($expected, $result);
     }
@@ -1796,7 +1577,7 @@ class RouterTest extends TestCase
     {
         Router::connect(
             '/:extra/page/:slug/*',
-            ['controller' => 'pages', 'action' => 'view', 'extra' => null],
+            ['controller' => 'Pages', 'action' => 'view', 'extra' => null],
             ['extra' => '[a-z1-9_]*', 'slug' => '[a-z1-9_]+', 'action' => 'view']
         );
 
@@ -1804,11 +1585,11 @@ class RouterTest extends TestCase
         $expected = [
             'pass' => [],
             'plugin' => null,
-            'controller' => 'pages',
+            'controller' => 'Pages',
             'action' => 'view',
             'slug' => 'this_is_the_slug',
             'extra' => 'some_extra',
-            '_matchedRoute' => '/:extra/page/:slug/*'
+            '_matchedRoute' => '/:extra/page/:slug/*',
         ];
         $this->assertEquals($expected, $result);
 
@@ -1816,69 +1597,50 @@ class RouterTest extends TestCase
         $expected = [
             'pass' => [],
             'plugin' => null,
-            'controller' => 'pages',
+            'controller' => 'Pages',
             'action' => 'view',
             'slug' => 'this_is_the_slug',
             'extra' => null,
-            '_matchedRoute' => '/:extra/page/:slug/*'
+            '_matchedRoute' => '/:extra/page/:slug/*',
         ];
         $this->assertEquals($expected, $result);
 
         Router::reload();
         Router::connect(
             '/:extra/page/:slug/*',
-            ['controller' => 'pages', 'action' => 'view', 'extra' => null],
+            ['controller' => 'Pages', 'action' => 'view', 'extra' => null],
             ['extra' => '[a-z1-9_]*', 'slug' => '[a-z1-9_]+']
         );
 
         $result = Router::url([
-            'admin' => null,
             'plugin' => null,
-            'controller' => 'pages',
+            'controller' => 'Pages',
             'action' => 'view',
             'slug' => 'this_is_the_slug',
-            'extra' => null
+            'extra' => null,
         ]);
         $expected = '/page/this_is_the_slug';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = Router::url([
-            'admin' => null,
             'plugin' => null,
-            'controller' => 'pages',
+            'controller' => 'Pages',
             'action' => 'view',
             'slug' => 'this_is_the_slug',
-            'extra' => 'some_extra'
+            'extra' => 'some_extra',
         ]);
         $expected = '/some_extra/page/this_is_the_slug';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
      * Test exceptions when parsing fails.
-     *
      */
     public function testParseError()
     {
         $this->expectException(\Cake\Routing\Exception\MissingRouteException::class);
         Router::connect('/', ['controller' => 'Pages', 'action' => 'display', 'home']);
         Router::parseRequest($this->makeRequest('/nope', 'GET'));
-    }
-
-    /**
-     * Test deprecated behavior
-     *
-     * @group deprecated
-     * @return void
-     */
-    public function testParseMethodCondition()
-    {
-        $this->deprecated(function () {
-            Router::connect('/posts', ['controller' => 'Posts', '_method' => 'POST']);
-
-            $_SERVER['REQUEST_METHOD'] = 'POST';
-            $this->assertNotEmpty(Router::parse('/posts'));
-        });
     }
 
     /**
@@ -1921,7 +1683,7 @@ class RouterTest extends TestCase
         $this->_connectDefaultRoutes();
 
         $result = Router::parseRequest($this->makeRequest('/posts.rss', 'GET'));
-        $this->assertEquals('rss', $result['_ext']);
+        $this->assertSame('rss', $result['_ext']);
 
         $result = Router::parseRequest($this->makeRequest('/posts.xml', 'GET'));
         $this->assertArrayNotHasKey('_ext', $result);
@@ -1958,28 +1720,28 @@ class RouterTest extends TestCase
      */
     public function testResourcesInScope()
     {
-        Router::scope('/api', ['prefix' => 'api'], function (RouteBuilder $routes) {
+        Router::scope('/api', ['prefix' => 'Api'], function (RouteBuilder $routes) {
             $routes->setExtensions(['json']);
             $routes->resources('Articles');
         });
         $url = Router::url([
-            'prefix' => 'api',
+            'prefix' => 'Api',
             'controller' => 'Articles',
             'action' => 'edit',
             '_method' => 'PUT',
-            'id' => 99
+            'id' => '99',
         ]);
-        $this->assertEquals('/api/articles/99', $url);
+        $this->assertSame('/api/articles/99', $url);
 
         $url = Router::url([
-            'prefix' => 'api',
+            'prefix' => 'Api',
             'controller' => 'Articles',
             'action' => 'edit',
             '_method' => 'PUT',
             '_ext' => 'json',
-            'id' => 99
+            'id' => '99',
         ]);
-        $this->assertEquals('/api/articles/99.json', $url);
+        $this->assertSame('/api/articles/99.json', $url);
     }
 
     /**
@@ -1999,7 +1761,7 @@ class RouterTest extends TestCase
             'action' => 'index',
             '_ext' => 'rss',
             'pass' => [],
-            '_matchedRoute' => '/:controller'
+            '_matchedRoute' => '/{controller}',
         ];
         $this->assertEquals($expected, $result);
 
@@ -2010,7 +1772,7 @@ class RouterTest extends TestCase
             'action' => 'view',
             'pass' => ['1'],
             '_ext' => 'rss',
-            '_matchedRoute' => '/:controller/:action/*'
+            '_matchedRoute' => '/{controller}/{action}/*',
         ];
         $this->assertEquals($expected, $result);
 
@@ -2029,7 +1791,7 @@ class RouterTest extends TestCase
             'action' => 'index',
             '_ext' => 'xml',
             'pass' => [],
-            '_matchedRoute' => '/:controller'
+            '_matchedRoute' => '/{controller}',
         ];
         $this->assertEquals($expected, $result);
 
@@ -2040,47 +1802,47 @@ class RouterTest extends TestCase
             'action' => 'index',
             'pass' => [],
             '?' => ['hello' => 'goodbye'],
-            '_matchedRoute' => '/:controller'
+            '_matchedRoute' => '/{controller}',
         ];
         $this->assertEquals($expected, $result);
 
         Router::reload();
-        Router::connect('/controller/action', ['controller' => 'controller', 'action' => 'action', '_ext' => 'rss']);
+        Router::connect('/controller/action', ['controller' => 'Controller', 'action' => 'action', '_ext' => 'rss']);
         $result = Router::parseRequest($this->makeRequest('/controller/action', 'GET'));
         $expected = [
-            'controller' => 'controller',
+            'controller' => 'Controller',
             'action' => 'action',
             'plugin' => null,
             '_ext' => 'rss',
             'pass' => [],
-            '_matchedRoute' => '/controller/action'
+            '_matchedRoute' => '/controller/action',
         ];
         $this->assertEquals($expected, $result);
 
         Router::reload();
-        Router::connect('/controller/action', ['controller' => 'controller', 'action' => 'action', '_ext' => 'rss']);
+        Router::connect('/controller/action', ['controller' => 'Controller', 'action' => 'action', '_ext' => 'rss']);
         $result = Router::parseRequest($this->makeRequest('/controller/action', 'GET'));
         $expected = [
-            'controller' => 'controller',
+            'controller' => 'Controller',
             'action' => 'action',
             'plugin' => null,
             '_ext' => 'rss',
             'pass' => [],
-            '_matchedRoute' => '/controller/action'
+            '_matchedRoute' => '/controller/action',
         ];
         $this->assertEquals($expected, $result);
 
         Router::reload();
         Router::extensions('rss', false);
-        Router::connect('/controller/action', ['controller' => 'controller', 'action' => 'action', '_ext' => 'rss']);
+        Router::connect('/controller/action', ['controller' => 'Controller', 'action' => 'action', '_ext' => 'rss']);
         $result = Router::parseRequest($this->makeRequest('/controller/action', 'GET'));
         $expected = [
-            'controller' => 'controller',
+            'controller' => 'Controller',
             'action' => 'action',
             'plugin' => null,
             '_ext' => 'rss',
             'pass' => [],
-            '_matchedRoute' => '/controller/action'
+            '_matchedRoute' => '/controller/action',
         ];
         $this->assertEquals($expected, $result);
     }
@@ -2094,54 +1856,54 @@ class RouterTest extends TestCase
     public function testUrlGenerationWithAutoPrefixes()
     {
         Router::reload();
-        Router::connect('/protected/:controller/:action/*', ['prefix' => 'protected']);
-        Router::connect('/admin/:controller/:action/*', ['prefix' => 'admin']);
+        Router::connect('/protected/:controller/:action/*', ['prefix' => 'Protected']);
+        Router::connect('/admin/:controller/:action/*', ['prefix' => 'Admin']);
         Router::connect('/:controller/:action/*');
 
         $request = new ServerRequest([
             'url' => '/images/index',
             'params' => [
-                'plugin' => null, 'controller' => 'images', 'action' => 'index',
-                'prefix' => null, 'protected' => false, 'url' => ['url' => 'images/index']
+                'plugin' => null, 'controller' => 'Images', 'action' => 'index',
+                'prefix' => null, 'protected' => false, 'url' => ['url' => 'images/index'],
             ],
         ]);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
 
-        $result = Router::url(['controller' => 'images', 'action' => 'add']);
-        $expected = '/images/add';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['controller' => 'Images', 'action' => 'add']);
+        $expected = '/Images/add';
+        $this->assertSame($expected, $result);
 
-        $result = Router::url(['controller' => 'images', 'action' => 'add', 'prefix' => 'protected']);
-        $expected = '/protected/images/add';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['controller' => 'Images', 'action' => 'add', 'prefix' => 'Protected']);
+        $expected = '/protected/Images/add';
+        $this->assertSame($expected, $result);
 
-        $result = Router::url(['controller' => 'images', 'action' => 'add_protected_test', 'prefix' => 'protected']);
-        $expected = '/protected/images/add_protected_test';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['controller' => 'Images', 'action' => 'add_protected_test', 'prefix' => 'Protected']);
+        $expected = '/protected/Images/add_protected_test';
+        $this->assertSame($expected, $result);
 
         $result = Router::url(['action' => 'edit', 1]);
-        $expected = '/images/edit/1';
-        $this->assertEquals($expected, $result);
+        $expected = '/Images/edit/1';
+        $this->assertSame($expected, $result);
 
-        $result = Router::url(['action' => 'edit', 1, 'prefix' => 'protected']);
-        $expected = '/protected/images/edit/1';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['action' => 'edit', 1, 'prefix' => 'Protected']);
+        $expected = '/protected/Images/edit/1';
+        $this->assertSame($expected, $result);
 
-        $result = Router::url(['action' => 'protectededit', 1, 'prefix' => 'protected']);
-        $expected = '/protected/images/protectededit/1';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['action' => 'protectedEdit', 1, 'prefix' => 'Protected']);
+        $expected = '/protected/Images/protectedEdit/1';
+        $this->assertSame($expected, $result);
 
-        $result = Router::url(['action' => 'edit', 1, 'prefix' => 'protected']);
-        $expected = '/protected/images/edit/1';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['action' => 'edit', 1, 'prefix' => 'Protected']);
+        $expected = '/protected/Images/edit/1';
+        $this->assertSame($expected, $result);
 
-        $result = Router::url(['controller' => 'others', 'action' => 'edit', 1]);
-        $expected = '/others/edit/1';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['controller' => 'Others', 'action' => 'edit', 1]);
+        $expected = '/Others/edit/1';
+        $this->assertSame($expected, $result);
 
-        $result = Router::url(['controller' => 'others', 'action' => 'edit', 1, 'prefix' => 'protected']);
-        $expected = '/protected/others/edit/1';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['controller' => 'Others', 'action' => 'edit', 1, 'prefix' => 'Protected']);
+        $expected = '/protected/Others/edit/1';
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -2151,65 +1913,26 @@ class RouterTest extends TestCase
      */
     public function testGenerationWithSslOption()
     {
+        Router::fullBaseUrl('http://app.test');
         Router::connect('/:controller/:action/*');
         $request = new ServerRequest([
             'url' => '/images/index',
             'params' => [
-                'plugin' => null, 'controller' => 'images', 'action' => 'index'
+                'plugin' => null, 'controller' => 'Images', 'action' => 'index',
             ],
-            'environment' => ['HTTP_HOST' => 'localhost']
+            'environment' => ['HTTP_HOST' => 'localhost'],
         ]);
-        Router::pushRequest($request);
+        Router::setRequest($request);
 
         $result = Router::url([
-            '_ssl' => true
-        ]);
-        $this->assertEquals('https://localhost/images/index', $result);
-
-        $result = Router::url([
-            '_ssl' => false
-        ]);
-        $this->assertEquals('http://localhost/images/index', $result);
-    }
-
-    /**
-     * Test that the _ssl + _full options work together.
-     *
-     * @return void
-     */
-    public function testGenerationWithSslAndFullOption()
-    {
-        Configure::write('App.fullBaseUrl', 'http://app.localhost');
-        Router::connect('/:controller/:action/*');
-
-        $request = new ServerRequest([
-            'environment' => ['HTTP_HOST' => 'localhost']
-        ]);
-        Router::pushRequest($request);
-
-        $result = Router::url([
-            'controller' => 'images',
-            'action' => 'index',
             '_ssl' => true,
-            '_full' => true
         ]);
-        $this->assertEquals('https://app.localhost/images/index', $result);
+        $this->assertSame('https://app.test/Images/index', $result);
 
         $result = Router::url([
-            'controller' => 'images',
-            'action' => 'index',
             '_ssl' => false,
-            '_full' => true,
         ]);
-        $this->assertEquals('http://app.localhost/images/index', $result);
-
-        $result = Router::url([
-            'controller' => 'images',
-            'action' => 'index',
-            '_full' => false,
-            '_ssl' => false
-        ]);
-        $this->assertEquals('http://localhost/images/index', $result);
+        $this->assertSame('http://app.test/Images/index', $result);
     }
 
     /**
@@ -2222,24 +1945,24 @@ class RouterTest extends TestCase
         Router::connect('/:controller/:action/*');
         $request = new ServerRequest([
             'url' => '/images/index',
-            'environment' => ['HTTP_HOST' => 'localhost', 'HTTPS' => 'on'],
+            'environment' => ['HTTP_HOST' => 'app.test', 'HTTPS' => 'on'],
             'params' => [
                 'plugin' => null,
-                'controller' => 'images',
-                'action' => 'index'
-            ]
+                'controller' => 'Images',
+                'action' => 'index',
+            ],
         ]);
-        Router::pushRequest($request);
+        Router::setRequest($request);
 
         $result = Router::url([
-            '_ssl' => false
+            '_ssl' => false,
         ]);
-        $this->assertEquals('http://localhost/images/index', $result);
+        $this->assertSame('http://app.test/Images/index', $result);
 
         $result = Router::url([
-            '_ssl' => true
+            '_ssl' => true,
         ]);
-        $this->assertEquals('https://localhost/images/index', $result);
+        $this->assertSame('https://app.test/Images/index', $result);
     }
 
     /**
@@ -2250,31 +1973,31 @@ class RouterTest extends TestCase
     public function testPrefixRoutePersistence()
     {
         Router::reload();
-        Router::connect('/protected/:controller/:action', ['prefix' => 'protected']);
+        Router::connect('/protected/:controller/:action', ['prefix' => 'Protected']);
         Router::connect('/:controller/:action');
 
         $request = new ServerRequest([
             'url' => '/protected/images/index',
             'params' => [
                 'plugin' => null,
-                'controller' => 'images',
+                'controller' => 'Images',
                 'action' => 'index',
-                'prefix' => 'protected',
-            ]
+                'prefix' => 'Protected',
+            ],
         ]);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
 
-        $result = Router::url(['prefix' => 'protected', 'controller' => 'images', 'action' => 'add']);
-        $expected = '/protected/images/add';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['prefix' => 'Protected', 'controller' => 'Images', 'action' => 'add']);
+        $expected = '/protected/Images/add';
+        $this->assertSame($expected, $result);
 
-        $result = Router::url(['controller' => 'images', 'action' => 'add']);
-        $expected = '/protected/images/add';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['controller' => 'Images', 'action' => 'add']);
+        $expected = '/protected/Images/add';
+        $this->assertSame($expected, $result);
 
-        $result = Router::url(['controller' => 'images', 'action' => 'add', 'prefix' => false]);
-        $expected = '/images/add';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['controller' => 'Images', 'action' => 'add', 'prefix' => false]);
+        $expected = '/Images/add';
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -2284,31 +2007,31 @@ class RouterTest extends TestCase
      */
     public function testPrefixOverride()
     {
-        Router::connect('/admin/:controller/:action', ['prefix' => 'admin']);
-        Router::connect('/protected/:controller/:action', ['prefix' => 'protected']);
+        Router::connect('/admin/:controller/:action', ['prefix' => 'Admin']);
+        Router::connect('/protected/:controller/:action', ['prefix' => 'Protected']);
 
         $request = new ServerRequest([
             'url' => '/protected/images/index',
             'params' => [
-                'plugin' => null, 'controller' => 'images', 'action' => 'index', 'prefix' => 'protected',
+                'plugin' => null, 'controller' => 'Images', 'action' => 'index', 'prefix' => 'Protected',
             ],
         ]);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
 
-        $result = Router::url(['controller' => 'images', 'action' => 'add', 'prefix' => 'admin']);
-        $expected = '/admin/images/add';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['controller' => 'Images', 'action' => 'add', 'prefix' => 'Admin']);
+        $expected = '/admin/Images/add';
+        $this->assertSame($expected, $result);
 
         $request = new ServerRequest([
             'url' => '/admin/images/index',
             'params' => [
-                'plugin' => null, 'controller' => 'images', 'action' => 'index', 'prefix' => 'admin',
+                'plugin' => null, 'controller' => 'Images', 'action' => 'index', 'prefix' => 'Admin',
             ],
         ]);
-        Router::setRequestInfo($request);
-        $result = Router::url(['controller' => 'images', 'action' => 'add', 'prefix' => 'protected']);
-        $expected = '/protected/images/add';
-        $this->assertEquals($expected, $result);
+        Router::setRequest($request);
+        $result = Router::url(['controller' => 'Images', 'action' => 'add', 'prefix' => 'Protected']);
+        $expected = '/protected/Images/add';
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -2320,19 +2043,19 @@ class RouterTest extends TestCase
     {
         Router::connect('/cache/*', ['prefix' => false, 'plugin' => true, 'controller' => 0, 'action' => 1]);
 
-        $url = Router::url(['prefix' => 0, 'plugin' => 1, 'controller' => 0, 'action' => 1, 'test']);
+        $url = Router::url(['prefix' => '0', 'plugin' => '1', 'controller' => '0', 'action' => '1', 'test']);
         $expected = '/cache/test';
-        $this->assertEquals($expected, $url);
+        $this->assertSame($expected, $url);
 
         try {
-            Router::url(['controller' => 0, 'action' => 1, 'test']);
+            Router::url(['controller' => '0', 'action' => '1', 'test']);
             $this->fail('No exception raised');
         } catch (\Exception $e) {
             $this->assertTrue(true, 'Exception was raised');
         }
 
         try {
-            Router::url(['prefix' => 1, 'controller' => 0, 'action' => 1, 'test']);
+            Router::url(['prefix' => '1', 'controller' => '0', 'action' => '1', 'test']);
             $this->fail('No exception raised');
         } catch (\Exception $e) {
             $this->assertTrue(true, 'Exception was raised');
@@ -2351,18 +2074,18 @@ class RouterTest extends TestCase
             'url' => '/',
             'base' => '/base',
             'params' => [
-                'plugin' => null, 'controller' => 'controller', 'action' => 'index',
-            ]
+                'plugin' => null, 'controller' => 'Controller', 'action' => 'index',
+            ],
         ]);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
 
-        $result = Router::url(['controller' => 'my_controller', 'action' => 'my_action']);
-        $expected = '/base/my_controller/my_action';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['controller' => 'MyController', 'action' => 'myAction']);
+        $expected = '/base/MyController/myAction';
+        $this->assertSame($expected, $result);
 
-        $result = Router::url(['controller' => 'my_controller', 'action' => 'my_action', '_base' => false]);
-        $expected = '/my_controller/my_action';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['controller' => 'MyController', 'action' => 'myAction', '_base' => false]);
+        $expected = '/MyController/myAction';
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -2372,16 +2095,16 @@ class RouterTest extends TestCase
      */
     public function testPagesUrlParsing()
     {
-        Router::connect('/', ['controller' => 'pages', 'action' => 'display', 'home']);
-        Router::connect('/pages/*', ['controller' => 'pages', 'action' => 'display']);
+        Router::connect('/', ['controller' => 'Pages', 'action' => 'display', 'home']);
+        Router::connect('/pages/*', ['controller' => 'Pages', 'action' => 'display']);
 
         $result = Router::parseRequest($this->makeRequest('/', 'GET'));
         $expected = [
             'pass' => ['home'],
             'plugin' => null,
-            'controller' => 'pages',
+            'controller' => 'Pages',
             'action' => 'display',
-            '_matchedRoute' => '/'
+            '_matchedRoute' => '/',
         ];
         $this->assertEquals($expected, $result);
 
@@ -2389,36 +2112,36 @@ class RouterTest extends TestCase
         $expected = [
             'pass' => ['home'],
             'plugin' => null,
-            'controller' => 'pages',
+            'controller' => 'Pages',
             'action' => 'display',
-            '_matchedRoute' => '/pages/*'
+            '_matchedRoute' => '/pages/*',
         ];
         $this->assertEquals($expected, $result);
 
         Router::reload();
-        Router::connect('/', ['controller' => 'pages', 'action' => 'display', 'home']);
+        Router::connect('/', ['controller' => 'Pages', 'action' => 'display', 'home']);
 
         $result = Router::parseRequest($this->makeRequest('/', 'GET'));
         $expected = [
             'pass' => ['home'],
             'plugin' => null,
-            'controller' => 'pages',
+            'controller' => 'Pages',
             'action' => 'display',
-            '_matchedRoute' => '/'
+            '_matchedRoute' => '/',
         ];
         $this->assertEquals($expected, $result);
 
         Router::reload();
-        Router::connect('/', ['controller' => 'posts', 'action' => 'index']);
-        Router::connect('/pages/*', ['controller' => 'pages', 'action' => 'display']);
+        Router::connect('/', ['controller' => 'Posts', 'action' => 'index']);
+        Router::connect('/pages/*', ['controller' => 'Pages', 'action' => 'display']);
         $result = Router::parseRequest($this->makeRequest('/pages/contact/', 'GET'));
 
         $expected = [
             'pass' => ['contact'],
             'plugin' => null,
-            'controller' => 'pages',
+            'controller' => 'Pages',
             'action' => 'display',
-            '_matchedRoute' => '/pages/*'
+            '_matchedRoute' => '/pages/*',
         ];
         $this->assertEquals($expected, $result);
     }
@@ -2433,10 +2156,10 @@ class RouterTest extends TestCase
         Router::reload();
         Router::connect('/:controller/:action/*');
         $result = Router::parseRequest($this->makeRequest('/posts/view/something.', 'GET'));
-        $this->assertEquals('something.', $result['pass'][0], 'Period was chopped off');
+        $this->assertSame('something.', $result['pass'][0], 'Period was chopped off');
 
         $result = Router::parseRequest($this->makeRequest('/posts/view/something. . .', 'GET'));
-        $this->assertEquals('something. . .', $result['pass'][0], 'Period was chopped off');
+        $this->assertSame('something. . .', $result['pass'][0], 'Period was chopped off');
     }
 
     /**
@@ -2450,10 +2173,10 @@ class RouterTest extends TestCase
         Router::connect('/:controller/:action/*');
 
         $result = Router::parseRequest($this->makeRequest('/posts/view/something.', 'GET'));
-        $this->assertEquals('something.', $result['pass'][0], 'Period was chopped off');
+        $this->assertSame('something.', $result['pass'][0], 'Period was chopped off');
 
         $result = Router::parseRequest($this->makeRequest('/posts/view/something. . .', 'GET'));
-        $this->assertEquals('something. . .', $result['pass'][0], 'Period was chopped off');
+        $this->assertSame('something. . .', $result['pass'][0], 'Period was chopped off');
     }
 
     /**
@@ -2466,21 +2189,133 @@ class RouterTest extends TestCase
         $this->expectException(\Cake\Routing\Exception\MissingRouteException::class);
         Router::connect(
             '/blog/:action/*',
-            ['controller' => 'blog_posts'],
+            ['controller' => 'BlogPosts'],
             ['action' => 'other|actions']
         );
 
         $result = Router::parseRequest($this->makeRequest('/blog/other', 'GET'));
         $expected = [
             'plugin' => null,
-            'controller' => 'blog_posts',
+            'controller' => 'BlogPosts',
             'action' => 'other',
             'pass' => [],
-            '_matchedRoute' => '/blog/:action/*'
+            '_matchedRoute' => '/blog/:action/*',
         ];
         $this->assertEquals($expected, $result);
 
         Router::parseRequest($this->makeRequest('/blog/foobar', 'GET'));
+    }
+
+    /**
+     * Test parseRoutePath() with valid strings
+     *
+     * @return void
+     */
+    public function testParseRoutePath()
+    {
+        $expected = [
+            'controller' => 'Bookmarks',
+            'action' => 'view',
+        ];
+        $this->assertSame($expected, Router::parseRoutePath('Bookmarks::view'));
+
+        $expected = [
+            'prefix' => 'Admin',
+            'controller' => 'Bookmarks',
+            'action' => 'view',
+        ];
+        $this->assertSame($expected, Router::parseRoutePath('Admin/Bookmarks::view'));
+
+        $expected = [
+            'prefix' => 'LongPrefix/BackEnd',
+            'controller' => 'Bookmarks',
+            'action' => 'view',
+        ];
+        $this->assertSame($expected, Router::parseRoutePath('LongPrefix/BackEnd/Bookmarks::view'));
+
+        $expected = [
+            'plugin' => 'Cms',
+            'controller' => 'Articles',
+            'action' => 'edit',
+        ];
+        $this->assertSame($expected, Router::parseRoutePath('Cms.Articles::edit'));
+
+        $expected = [
+            'plugin' => 'Vendor/Cms',
+            'prefix' => 'Management/Admin',
+            'controller' => 'Articles',
+            'action' => 'view',
+        ];
+        $this->assertSame($expected, Router::parseRoutePath('Vendor/Cms.Management/Admin/Articles::view'));
+    }
+
+    /**
+     * @return array
+     */
+    public function invalidRoutePathProvider()
+    {
+        return [
+            ['view'],
+            ['Bookmarks:view'],
+            ['Bookmarks/view'],
+            ['Vendor\Cms.Articles::edit'],
+            ['Vendor//Cms.Articles::edit'],
+            ['Cms./Articles::edit'],
+            ['Cms./Admin/Articles::edit'],
+            ['Cms.Admin//Articles::edit'],
+            ['Vendor\Cms.Management\Admin\Articles::edit'],
+        ];
+    }
+
+    /**
+     * Test parseRoutePath() with invalid strings
+     *
+     * @param string $value
+     * @return void
+     * @dataProvider invalidRoutePathProvider
+     */
+    public function testParseInvalidRoutePath(string $value)
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Could not parse a string route path');
+
+        Router::parseRoutePath($value);
+    }
+
+    /**
+     * Tests that convenience wrapper urlArray() works as the internal
+     * Router::parseRoutePath() does.
+     *
+     * @return void
+     */
+    public function testUrlArray(): void
+    {
+        $expected = [
+            'controller' => 'Bookmarks',
+            'action' => 'view',
+            'plugin' => false,
+            'prefix' => false,
+        ];
+        $this->assertSame($expected, urlArray('Bookmarks::view'));
+
+        $expected = [
+            'prefix' => 'Admin',
+            'controller' => 'Bookmarks',
+            'action' => 'view',
+            'plugin' => false,
+        ];
+        $this->assertSame($expected, urlArray('Admin/Bookmarks::view'));
+
+        $expected = [
+            'plugin' => 'Vendor/Cms',
+            'prefix' => 'Management/Admin',
+            'controller' => 'Articles',
+            'action' => 'view',
+            3,
+            '?' => ['query' => 'string'],
+        ];
+        $params = [3, '?' => ['query' => 'string']];
+        $this->assertSame($expected, urlArray('Vendor/Cms.Management/Admin/Articles::view', $params));
     }
 
     /**
@@ -2493,15 +2328,15 @@ class RouterTest extends TestCase
         $this->expectException(\Cake\Routing\Exception\MissingRouteException::class);
         Router::connect(
             '/blog/:action/*',
-            ['controller' => 'blog_posts'],
+            ['controller' => 'BlogPosts'],
             ['action' => 'other|actions']
         );
 
-        $result = Router::url(['controller' => 'blog_posts', 'action' => 'actions']);
-        $this->assertEquals('/blog/actions', $result);
+        $result = Router::url(['controller' => 'BlogPosts', 'action' => 'actions']);
+        $this->assertSame('/blog/actions', $result);
 
-        $result = Router::url(['controller' => 'blog_posts', 'action' => 'foo']);
-        $this->assertEquals('/', $result);
+        $result = Router::url(['controller' => 'BlogPosts', 'action' => 'foo']);
+        $this->assertSame('/', $result);
     }
 
     /**
@@ -2512,38 +2347,38 @@ class RouterTest extends TestCase
     public function testParsingWithLiteralPrefixes()
     {
         Router::reload();
-        $adminParams = ['prefix' => 'admin'];
+        $adminParams = ['prefix' => 'Admin'];
         Router::connect('/admin/:controller', $adminParams);
         Router::connect('/admin/:controller/:action/*', $adminParams);
 
         $request = new ServerRequest([
             'url' => '/',
             'base' => '/base',
-            'params' => ['plugin' => null, 'controller' => 'controller', 'action' => 'index']
+            'params' => ['plugin' => null, 'controller' => 'Controller', 'action' => 'index'],
         ]);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
 
-        $result = Router::parseRequest($this->makeRequest('/admin/posts/', 'GET'));
+        $result = Router::parseRequest($this->makeRequest('/admin/Posts/', 'GET'));
         $expected = [
             'pass' => [],
-            'prefix' => 'admin',
+            'prefix' => 'Admin',
             'plugin' => null,
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'index',
-            '_matchedRoute' => '/admin/:controller'
+            '_matchedRoute' => '/admin/:controller',
         ];
         $this->assertEquals($expected, $result);
 
-        $result = Router::parseRequest($this->makeRequest('/admin/posts', 'GET'));
+        $result = Router::parseRequest($this->makeRequest('/admin/Posts', 'GET'));
         $this->assertEquals($expected, $result);
 
-        $result = Router::url(['prefix' => 'admin', 'controller' => 'posts']);
-        $expected = '/base/admin/posts';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['prefix' => 'Admin', 'controller' => 'Posts']);
+        $expected = '/base/admin/Posts';
+        $this->assertSame($expected, $result);
 
         Router::reload();
 
-        $prefixParams = ['prefix' => 'members'];
+        $prefixParams = ['prefix' => 'Members'];
         Router::connect('/members/:controller', $prefixParams);
         Router::connect('/members/:controller/:action', $prefixParams);
         Router::connect('/members/:controller/:action/*', $prefixParams);
@@ -2551,24 +2386,24 @@ class RouterTest extends TestCase
         $request = new ServerRequest([
             'url' => '/',
             'base' => '/base',
-            'params' => ['plugin' => null, 'controller' => 'controller', 'action' => 'index']
+            'params' => ['plugin' => null, 'controller' => 'Controller', 'action' => 'index'],
         ]);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
 
-        $result = Router::parseRequest($this->makeRequest('/members/posts/index', 'GET'));
+        $result = Router::parseRequest($this->makeRequest('/members/Posts/index', 'GET'));
         $expected = [
             'pass' => [],
-            'prefix' => 'members',
+            'prefix' => 'Members',
             'plugin' => null,
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'index',
-            '_matchedRoute' => '/members/:controller/:action'
+            '_matchedRoute' => '/members/:controller/:action',
         ];
         $this->assertEquals($expected, $result);
 
-        $result = Router::url(['prefix' => 'members', 'controller' => 'users', 'action' => 'add']);
-        $expected = '/base/members/users/add';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['prefix' => 'Members', 'controller' => 'Users', 'action' => 'add']);
+        $expected = '/base/members/Users/add';
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -2578,27 +2413,27 @@ class RouterTest extends TestCase
      */
     public function testUrlWritingWithPrefixes()
     {
-        Router::connect('/company/:controller/:action/*', ['prefix' => 'company']);
-        Router::connect('/:action', ['controller' => 'users']);
+        Router::connect('/company/:controller/:action/*', ['prefix' => 'Company']);
+        Router::connect('/:action', ['controller' => 'Users']);
 
-        $result = Router::url(['controller' => 'users', 'action' => 'login', 'prefix' => 'company']);
-        $expected = '/company/users/login';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['controller' => 'Users', 'action' => 'login', 'prefix' => 'Company']);
+        $expected = '/company/Users/login';
+        $this->assertSame($expected, $result);
 
         $request = new ServerRequest([
             'url' => '/',
             'params' => [
                 'plugin' => null,
-                'controller' => 'users',
+                'controller' => 'Users',
                 'action' => 'login',
-                'prefix' => 'company'
-            ]
+                'prefix' => 'Company',
+            ],
         ]);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
 
-        $result = Router::url(['controller' => 'users', 'action' => 'login', 'prefix' => false]);
+        $result = Router::url(['controller' => 'Users', 'action' => 'login', 'prefix' => false]);
         $expected = '/login';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -2610,24 +2445,24 @@ class RouterTest extends TestCase
     {
         Router::connect(
             '/admin/login',
-            ['controller' => 'users', 'action' => 'login', 'prefix' => 'admin']
+            ['controller' => 'Users', 'action' => 'login', 'prefix' => 'Admin']
         );
         $request = new ServerRequest([
             'url' => '/',
             'params' => [
                 'plugin' => null,
-                'controller' => 'posts',
+                'controller' => 'Posts',
                 'action' => 'index',
-                'prefix' => 'admin'
+                'prefix' => 'Admin',
             ],
-            'webroot' => '/'
+            'webroot' => '/',
         ]);
-        Router::setRequestInfo($request);
-        $result = Router::url(['controller' => 'users', 'action' => 'login']);
-        $this->assertEquals('/admin/login', $result);
+        Router::setRequest($request);
+        $result = Router::url(['controller' => 'Users', 'action' => 'login']);
+        $this->assertSame('/admin/login', $result);
 
-        $result = Router::url(['controller' => 'users', 'action' => 'login']);
-        $this->assertEquals('/admin/login', $result);
+        $result = Router::url(['controller' => 'Users', 'action' => 'login']);
+        $this->assertSame('/admin/login', $result);
     }
 
     /**
@@ -2637,21 +2472,21 @@ class RouterTest extends TestCase
      */
     public function testPassedArgsOrder()
     {
-        Router::connect('/test-passed/*', ['controller' => 'pages', 'action' => 'display', 'home']);
-        Router::connect('/test2/*', ['controller' => 'pages', 'action' => 'display', 2]);
-        Router::connect('/test/*', ['controller' => 'pages', 'action' => 'display', 1]);
+        Router::connect('/test-passed/*', ['controller' => 'Pages', 'action' => 'display', 'home']);
+        Router::connect('/test2/*', ['controller' => 'Pages', 'action' => 'display', 2]);
+        Router::connect('/test/*', ['controller' => 'Pages', 'action' => 'display', 1]);
 
-        $result = Router::url(['controller' => 'pages', 'action' => 'display', 1, 'whatever']);
+        $result = Router::url(['controller' => 'Pages', 'action' => 'display', 1, 'whatever']);
         $expected = '/test/whatever';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
-        $result = Router::url(['controller' => 'pages', 'action' => 'display', 2, 'whatever']);
+        $result = Router::url(['controller' => 'Pages', 'action' => 'display', 2, 'whatever']);
         $expected = '/test2/whatever';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
-        $result = Router::url(['controller' => 'pages', 'action' => 'display', 'home', 'whatever']);
+        $result = Router::url(['controller' => 'Pages', 'action' => 'display', 'home', 'whatever']);
         $expected = '/test-passed/whatever';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -2663,31 +2498,16 @@ class RouterTest extends TestCase
     {
         Router::connect('/:locale/:controller/:action/*', [], ['locale' => 'dan|eng']);
 
-        $result = Router::parseRequest($this->makeRequest('/eng/test/test_action', 'GET'));
+        $result = Router::parseRequest($this->makeRequest('/eng/Test/testAction', 'GET'));
         $expected = [
             'pass' => [],
             'locale' => 'eng',
-            'controller' => 'test',
-            'action' => 'test_action',
+            'controller' => 'Test',
+            'action' => 'testAction',
             'plugin' => null,
-            '_matchedRoute' => '/:locale/:controller/:action/*'
+            '_matchedRoute' => '/:locale/:controller/:action/*',
         ];
         $this->assertEquals($expected, $result);
-    }
-
-    /**
-     * testRegexRouteMatching error
-     *
-     * @group deprecated
-     * @return void
-     */
-    public function testRegexRouteMatchingError()
-    {
-        $this->expectException(\Cake\Routing\Exception\MissingRouteException::class);
-        $this->deprecated(function () {
-            Router::connect('/:locale/:controller/:action/*', [], ['locale' => 'dan|eng']);
-            Router::parse('/badness/test/test_action', 'GET');
-        });
     }
 
     /**
@@ -2704,20 +2524,20 @@ class RouterTest extends TestCase
             'url' => '/test/test_action',
             'params' => [
                 'plugin' => null,
-                'controller' => 'test',
+                'controller' => 'Test',
                 'action' => 'index',
             ],
-            'webroot' => '/'
+            'webroot' => '/',
         ]);
-        Router::setRequestInfo($request);
+        Router::setRequest($request);
 
-        $result = Router::url(['action' => 'test_another_action', 'locale' => 'eng']);
-        $expected = '/eng/test/test_another_action';
-        $this->assertEquals($expected, $result);
+        $result = Router::url(['action' => 'testAnotherAction', 'locale' => 'eng']);
+        $expected = '/eng/Test/testAnotherAction';
+        $this->assertSame($expected, $result);
 
-        $result = Router::url(['action' => 'test_another_action']);
+        $result = Router::url(['action' => 'testAnotherAction']);
         $expected = '/';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -2755,7 +2575,7 @@ class RouterTest extends TestCase
         $this->loadPlugins(['TestPlugin']);
         Router::connect(
             '/:slug',
-            ['controller' => 'posts', 'action' => 'view'],
+            ['controller' => 'Posts', 'action' => 'view'],
             ['routeClass' => 'TestPlugin.TestRoute', 'slug' => '[a-z_-]+']
         );
         $this->assertTrue(true); // Just to make sure the connect do not throw exception
@@ -2773,44 +2593,19 @@ class RouterTest extends TestCase
         Router::connect('/:controller', [], ['routeClass' => 'Object']);
     }
 
-    /**
-     * test reversing parameter arrays back into strings.
-     *
-     * Mark the router as initialized so it doesn't auto-load routes
-     *
-     * @return void
-     */
-    public function testReverseToken()
-    {
-        Router::connect('/:controller/:action/*');
-        $params = [
-            'controller' => 'posts',
-            'action' => 'view',
-            'pass' => [1],
-            'url' => [],
-            'autoRender' => 1,
-            'bare' => 1,
-            'return' => 1,
-            'requested' => 1,
-            '_Token' => ['key' => 'sekret']
-        ];
-        $result = Router::reverse($params);
-        $this->assertEquals('/posts/view/1', $result);
-    }
-
     public function testReverseLocalized()
     {
         Router::reload();
         Router::connect('/:lang/:controller/:action/*', [], ['lang' => '[a-z]{3}']);
         $params = [
             'lang' => 'eng',
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'view',
             'pass' => [1],
-            'url' => ['url' => 'eng/posts/view/1']
+            'url' => ['url' => 'eng/posts/view/1'],
         ];
         $result = Router::reverse($params);
-        $this->assertEquals('/eng/posts/view/1', $result);
+        $this->assertSame('/eng/Posts/view/1', $result);
     }
 
     public function testReverseArrayQuery()
@@ -2818,25 +2613,24 @@ class RouterTest extends TestCase
         Router::connect('/:lang/:controller/:action/*', [], ['lang' => '[a-z]{3}']);
         $params = [
             'lang' => 'eng',
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'view',
             1,
-            '?' => ['foo' => 'bar']
+            '?' => ['foo' => 'bar'],
         ];
         $result = Router::reverse($params);
-        $this->assertEquals('/eng/posts/view/1?foo=bar', $result);
+        $this->assertSame('/eng/Posts/view/1?foo=bar', $result);
 
         $params = [
             'lang' => 'eng',
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'view',
             'pass' => [1],
-            'url' => ['url' => 'eng/posts/view/1', 'foo' => 'bar', 'baz' => 'quu'],
-            'paging' => [],
-            'models' => []
+            'url' => ['url' => 'eng/posts/view/1'],
+            'models' => [],
         ];
         $result = Router::reverse($params);
-        $this->assertEquals('/eng/posts/view/1?foo=bar&baz=quu', $result);
+        $this->assertSame('/eng/Posts/view/1', $result);
     }
 
     public function testReverseCakeRequestQuery()
@@ -2846,28 +2640,31 @@ class RouterTest extends TestCase
             'url' => '/eng/posts/view/1',
             'params' => [
                 'lang' => 'eng',
-                'controller' => 'posts',
+                'controller' => 'Posts',
                 'action' => 'view',
                 'pass' => [1],
             ],
-            'query' => ['url' => 'eng/posts/view/1', 'test' => 'value']
+            'query' => ['test' => 'value'],
         ]);
         $result = Router::reverse($request);
-        $expected = '/eng/posts/view/1?test=value';
-        $this->assertEquals($expected, $result);
+        $expected = '/eng/Posts/view/1?test=value';
+        $this->assertSame($expected, $result);
     }
 
     public function testReverseFull()
     {
+        Router::scope('/', function (RouteBuilder $routes) {
+            $routes->fallbacks();
+        });
         $params = [
             'lang' => 'eng',
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'view',
             'pass' => [1],
-            'url' => ['url' => 'eng/posts/view/1']
+            'url' => ['url' => 'eng/posts/view/1'],
         ];
         $result = Router::reverse($params, true);
-        $this->assertRegExp('/^http(s)?:\/\//', $result);
+        $this->assertMatchesRegularExpression('/^http(s)?:\/\//', $result);
     }
 
     /**
@@ -2883,15 +2680,15 @@ class RouterTest extends TestCase
         $request = new ServerRequest([
             'url' => '/posts/view/1.json',
             'params' => [
-                'controller' => 'posts',
+                'controller' => 'Posts',
                 'action' => 'view',
                 'pass' => [1],
                 '_ext' => 'json',
-            ]
+            ],
         ]);
         $result = Router::reverse($request);
-        $expected = '/posts/view/1.json';
-        $this->assertEquals($expected, $result);
+        $expected = '/Posts/view/1.json';
+        $this->assertSame($expected, $result);
     }
 
     public function testReverseToArrayQuery()
@@ -2899,17 +2696,15 @@ class RouterTest extends TestCase
         Router::connect('/:lang/:controller/:action/*', [], ['lang' => '[a-z]{3}']);
         $params = [
             'lang' => 'eng',
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'view',
             'pass' => [123],
-            'url' => ['url' => 'eng/posts/view/123', 'foo' => 'bar', 'baz' => 'quu'],
-            'paging' => [],
-            'models' => [],
+            '?' => ['foo' => 'bar', 'baz' => 'quu'],
         ];
         $actual = Router::reverseToArray($params);
         $expected = [
             'lang' => 'eng',
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'view',
             123,
             '?' => ['foo' => 'bar', 'baz' => 'quu'],
@@ -2924,16 +2719,16 @@ class RouterTest extends TestCase
             'url' => '/eng/posts/view/1',
             'params' => [
                 'lang' => 'eng',
-                'controller' => 'posts',
+                'controller' => 'Posts',
                 'action' => 'view',
                 'pass' => [123],
             ],
-            'query' => ['url' => 'eng/posts/view/1', 'test' => 'value']
+            'query' => ['test' => 'value'],
         ]);
         $actual = Router::reverseToArray($request);
         $expected = [
             'lang' => 'eng',
-            'controller' => 'posts',
+            'controller' => 'Posts',
             'action' => 'view',
             123,
             '?' => [
@@ -2944,95 +2739,19 @@ class RouterTest extends TestCase
     }
 
     /**
-     * test that setRequestInfo can accept arrays and turn that into a Request object.
-     *
-     * @group deprecated
-     * @return void
-     */
-    public function testSetRequestInfoLegacy()
-    {
-        $this->deprecated(function () {
-            Router::setRequestInfo([
-                [
-                    'plugin' => null, 'controller' => 'images', 'action' => 'index',
-                    'url' => ['url' => 'protected/images/index']
-                ],
-                [
-                    'base' => '',
-                    'here' => '/protected/images/index',
-                    'webroot' => '/',
-                ]
-            ]);
-            $result = Router::getRequest();
-            $this->assertEquals('images', $result->getParam('controller'));
-            $this->assertEquals('index', $result->getParam('action'));
-
-            $this->assertEquals('', $result->getAttribute('base'));
-            $this->assertEquals('', $result->base);
-
-            $this->assertEquals('/protected/images/index', $result->getRequestTarget());
-            $this->assertEquals('/protected/images/index', $result->here);
-
-            $this->assertEquals('/', $result->getAttribute('webroot'));
-            $this->assertEquals('/', $result->webroot);
-        });
-    }
-
-    /**
      * test get request.
      *
      * @return void
      */
     public function testGetRequest()
     {
-        $requestA = new ServerRequest('/');
-        $requestB = new ServerRequest('/posts');
+        $requestA = new ServerRequest(['url' => '/']);
+        Router::setRequest($requestA);
+        $this->assertSame($requestA, Router::getRequest());
 
-        Router::pushRequest($requestA);
-        Router::pushRequest($requestB);
-
-        $this->assertSame($requestA, Router::getRequest(false));
-        $this->assertSame($requestB, Router::getRequest(true));
-    }
-
-    /**
-     * Test that Router::url() uses the first request
-     */
-    public function testUrlWithRequestAction()
-    {
-        Router::connect('/:controller', ['action' => 'index']);
-        Router::connect('/:controller/:action');
-
-        $firstRequest = new ServerRequest([
-            'url' => '/posts/index',
-            'params' => [
-                'plugin' => null,
-                'controller' => 'posts',
-                'action' => 'index'
-            ]
-        ]);
-
-        $secondRequest = new ServerRequest([
-            'url' => '/posts/index',
-            'params' => [
-                'requested' => 1,
-                'plugin' => null,
-                'controller' => 'comments',
-                'action' => 'listing'
-            ]
-        ]);
-        Router::setRequestInfo($firstRequest);
-        Router::setRequestInfo($secondRequest);
-
-        $result = Router::url(['_base' => false]);
-        $this->assertEquals('/comments/listing', $result, 'with second requests, the last should win.');
-
-        Router::popRequest();
-        $result = Router::url(['_base' => false]);
-        $this->assertEquals('/posts', $result, 'with second requests, the last should win.');
-
-        // Make sure that popping an empty request doesn't fail.
-        Router::popRequest();
+        $requestB = new ServerRequest(['url' => '/posts']);
+        Router::setRequest($requestB);
+        $this->assertSame($requestB, Router::getRequest());
     }
 
     /**
@@ -3045,7 +2764,7 @@ class RouterTest extends TestCase
         $url = 'http://example.com/posts/view/1';
 
         $route = $this->getMockBuilder('Cake\Routing\Route\Route')
-            ->setMethods(['match'])
+            ->onlyMethods(['match'])
             ->setConstructorArgs(['/:controller/:action/*'])
             ->getMock();
         $route->expects($this->any())
@@ -3053,8 +2772,8 @@ class RouterTest extends TestCase
             ->will($this->returnValue($url));
         Router::connect($route);
 
-        $result = Router::url(['controller' => 'posts', 'action' => 'view', 1]);
-        $this->assertEquals($url, $result);
+        $result = Router::url(['controller' => 'Posts', 'action' => 'view', 1]);
+        $this->assertSame($url, $result);
     }
 
     /**
@@ -3065,38 +2784,38 @@ class RouterTest extends TestCase
     public function testUrlProtocol()
     {
         $url = 'http://example.com';
-        $this->assertEquals($url, Router::url($url));
+        $this->assertSame($url, Router::url($url));
 
         $url = 'ed2k://example.com';
-        $this->assertEquals($url, Router::url($url));
+        $this->assertSame($url, Router::url($url));
 
         $url = 'svn+ssh://example.com';
-        $this->assertEquals($url, Router::url($url));
+        $this->assertSame($url, Router::url($url));
 
         $url = '://example.com';
-        $this->assertEquals($url, Router::url($url));
+        $this->assertSame($url, Router::url($url));
 
         $url = '//example.com';
-        $this->assertEquals($url, Router::url($url));
+        $this->assertSame($url, Router::url($url));
 
         $url = 'javascript:void(0)';
-        $this->assertEquals($url, Router::url($url));
+        $this->assertSame($url, Router::url($url));
 
         $url = 'tel:012345-678';
-        $this->assertEquals($url, Router::url($url));
+        $this->assertSame($url, Router::url($url));
 
         $url = 'sms:012345-678';
-        $this->assertEquals($url, Router::url($url));
+        $this->assertSame($url, Router::url($url));
 
         $url = '#here';
-        $this->assertEquals($url, Router::url($url));
+        $this->assertSame($url, Router::url($url));
 
         $url = '?param=0';
-        $this->assertEquals($url, Router::url($url));
+        $this->assertSame($url, Router::url($url));
 
         $url = '/posts/index#here';
         $expected = Configure::read('App.fullBaseUrl') . '/posts/index#here';
-        $this->assertEquals($expected, Router::url($url, true));
+        $this->assertSame($expected, Router::url($url, true));
     }
 
     /**
@@ -3108,18 +2827,18 @@ class RouterTest extends TestCase
     {
         $route = new Route(
             '/blog/:action/*',
-            ['controller' => 'blog_posts'],
+            ['controller' => 'BlogPosts'],
             ['action' => 'other|actions']
         );
-        $result = $route->match(['controller' => 'blog_posts', 'action' => 'foo']);
-        $this->assertFalse($result);
+        $result = $route->match(['controller' => 'BlogPosts', 'action' => 'foo']);
+        $this->assertNull($result);
 
-        $result = $route->match(['controller' => 'blog_posts', 'action' => 'actions']);
-        $this->assertEquals('/blog/actions/', $result);
+        $result = $route->match(['controller' => 'BlogPosts', 'action' => 'actions']);
+        $this->assertSame('/blog/actions/', $result);
 
         $result = $route->parseRequest($this->makeRequest('/blog/other', 'GET'));
         $expected = [
-            'controller' => 'blog_posts',
+            'controller' => 'BlogPosts',
             'action' => 'other',
             'pass' => [],
             '_matchedRoute' => '/blog/:action/*',
@@ -3127,91 +2846,7 @@ class RouterTest extends TestCase
         $this->assertEquals($expected, $result);
 
         $result = $route->parseRequest($this->makeRequest('/blog/foobar', 'GET'));
-        $this->assertFalse($result);
-    }
-
-    /**
-     * Test that redirect() works.
-     *
-     * @group deprecated
-     * @return void
-     */
-    public function testRedirect()
-    {
-        $this->deprecated(function () {
-            Router::redirect('/mobile', '/', ['status' => 301]);
-            $routes = Router::routes();
-            $route = $routes[0];
-            $this->assertInstanceOf('Cake\Routing\Route\RedirectRoute', $route);
-        });
-    }
-
-    /**
-     * Test that redirect() works with another route class.
-     *
-     * @group deprecated
-     * @return void
-     */
-    public function testRedirectWithAnotherRouteClass()
-    {
-        $this->deprecated(function () {
-            $route1 = $this->getMockBuilder('Cake\Routing\Route\RedirectRoute')
-                ->setConstructorArgs(['/mobile\''])
-                ->setMethods(['parse'])
-                ->getMock();
-            $class = '\\' . get_class($route1);
-
-            Router::redirect('/mobile', '/', [
-                'status' => 301,
-                'routeClass' => $class
-            ]);
-
-            $routes = Router::routes();
-            $route = $routes[0];
-            $this->assertInstanceOf($class, $route);
-        });
-    }
-
-    /**
-     * Test that the compatibility method for incoming urls works.
-     *
-     * @group deprecated
-     * @return void
-     */
-    public function testParseNamedParameters()
-    {
-        $this->deprecated(function () {
-            $request = new ServerRequest();
-            $request->addParams([
-                'controller' => 'posts',
-                'action' => 'index',
-            ]);
-            $result = Router::parseNamedParams($request);
-            $this->assertSame([], $result->params['named']);
-
-            $request = new ServerRequest();
-            $request->addParams([
-                'controller' => 'posts',
-                'action' => 'index',
-                'pass' => ['home', 'one:two', 'three:four', 'five[nested][0]:six', 'five[nested][1]:seven']
-            ]);
-            $request = Router::parseNamedParams($request);
-            $expected = [
-                'plugin' => null,
-                'controller' => 'posts',
-                'action' => 'index',
-                '_ext' => null,
-                'pass' => ['home'],
-                'named' => [
-                    'one' => 'two',
-                    'three' => 'four',
-                    'five' => [
-                        'nested' => ['six', 'seven']
-                    ]
-                ]
-            ];
-            $this->assertEquals($expected, $request->params);
-        });
+        $this->assertNull($result);
     }
 
     /**
@@ -3222,10 +2857,9 @@ class RouterTest extends TestCase
     public function testScope()
     {
         Router::scope('/path', ['param' => 'value'], function (RouteBuilder $routes) {
-            $this->assertInstanceOf('Cake\Routing\RouteBuilder', $routes);
-            $this->assertEquals('/path', $routes->path());
+            $this->assertSame('/path', $routes->path());
             $this->assertEquals(['param' => 'value'], $routes->params());
-            $this->assertEquals('', $routes->namePrefix());
+            $this->assertSame('', $routes->namePrefix());
 
             $routes->connect('/articles', ['controller' => 'Articles']);
         });
@@ -3290,7 +2924,7 @@ class RouterTest extends TestCase
         Router::scope('/path', $options, function (RouteBuilder $routes) {
             $this->assertSame('InflectedRoute', $routes->getRouteClass());
             $this->assertSame(['json'], $routes->getExtensions());
-            $this->assertEquals('/path', $routes->path());
+            $this->assertSame('/path', $routes->path());
             $this->assertEquals(['param' => 'value'], $routes->params());
         });
     }
@@ -3303,10 +2937,9 @@ class RouterTest extends TestCase
     public function testScopeNamePrefix()
     {
         Router::scope('/path', ['param' => 'value', '_namePrefix' => 'path:'], function (RouteBuilder $routes) {
-            $this->assertInstanceOf('Cake\Routing\RouteBuilder', $routes);
-            $this->assertEquals('/path', $routes->path());
+            $this->assertSame('/path', $routes->path());
             $this->assertEquals(['param' => 'value'], $routes->params());
-            $this->assertEquals('path:', $routes->namePrefix());
+            $this->assertSame('path:', $routes->namePrefix());
 
             $routes->connect('/articles', ['controller' => 'Articles']);
         });
@@ -3320,15 +2953,13 @@ class RouterTest extends TestCase
     public function testPrefix()
     {
         Router::prefix('admin', function (RouteBuilder $routes) {
-            $this->assertInstanceOf('Cake\Routing\RouteBuilder', $routes);
-            $this->assertEquals('/admin', $routes->path());
-            $this->assertEquals(['prefix' => 'admin'], $routes->params());
+            $this->assertSame('/admin', $routes->path());
+            $this->assertEquals(['prefix' => 'Admin'], $routes->params());
         });
 
         Router::prefix('admin', ['_namePrefix' => 'admin:'], function (RouteBuilder $routes) {
-            $this->assertInstanceOf('Cake\Routing\RouteBuilder', $routes);
-            $this->assertEquals('admin:', $routes->namePrefix());
-            $this->assertEquals(['prefix' => 'admin'], $routes->params());
+            $this->assertSame('admin:', $routes->namePrefix());
+            $this->assertEquals(['prefix' => 'Admin'], $routes->params());
         });
     }
 
@@ -3340,15 +2971,13 @@ class RouterTest extends TestCase
     public function testPrefixOptions()
     {
         Router::prefix('admin', ['param' => 'value'], function (RouteBuilder $routes) {
-            $this->assertInstanceOf('Cake\Routing\RouteBuilder', $routes);
-            $this->assertEquals('/admin', $routes->path());
-            $this->assertEquals(['prefix' => 'admin', 'param' => 'value'], $routes->params());
+            $this->assertSame('/admin', $routes->path());
+            $this->assertEquals(['prefix' => 'Admin', 'param' => 'value'], $routes->params());
         });
 
         Router::prefix('CustomPath', ['path' => '/custom-path'], function (RouteBuilder $routes) {
-            $this->assertInstanceOf('Cake\Routing\RouteBuilder', $routes);
-            $this->assertEquals('/custom-path', $routes->path());
-            $this->assertEquals(['prefix' => 'custom_path'], $routes->params());
+            $this->assertSame('/custom-path', $routes->path());
+            $this->assertEquals(['prefix' => 'CustomPath'], $routes->params());
         });
     }
 
@@ -3360,8 +2989,7 @@ class RouterTest extends TestCase
     public function testPlugin()
     {
         Router::plugin('DebugKit', function (RouteBuilder $routes) {
-            $this->assertInstanceOf('Cake\Routing\RouteBuilder', $routes);
-            $this->assertEquals('/debug_kit', $routes->path());
+            $this->assertSame('/debug-kit', $routes->path());
             $this->assertEquals(['plugin' => 'DebugKit'], $routes->params());
         });
     }
@@ -3374,14 +3002,12 @@ class RouterTest extends TestCase
     public function testPluginOptions()
     {
         Router::plugin('DebugKit', ['path' => '/debugger'], function (RouteBuilder $routes) {
-            $this->assertInstanceOf('Cake\Routing\RouteBuilder', $routes);
-            $this->assertEquals('/debugger', $routes->path());
+            $this->assertSame('/debugger', $routes->path());
             $this->assertEquals(['plugin' => 'DebugKit'], $routes->params());
         });
 
         Router::plugin('Contacts', ['_namePrefix' => 'contacts:'], function (RouteBuilder $routes) {
-            $this->assertInstanceOf('Cake\Routing\RouteBuilder', $routes);
-            $this->assertEquals('contacts:', $routes->namePrefix());
+            $this->assertSame('contacts:', $routes->namePrefix());
         });
     }
 
@@ -3394,18 +3020,18 @@ class RouterTest extends TestCase
     {
         Router::connect('/:controller', ['action' => 'index']);
         $result = Router::url(['controller' => 'FooBar', 'action' => 'index']);
-        $this->assertEquals('/FooBar', $result);
+        $this->assertSame('/FooBar', $result);
 
-        // This is needed because tests/boostrap.php sets App.namespace to 'App'
+        // This is needed because tests/bootstrap.php sets App.namespace to 'App'
         static::setAppNamespace();
 
         Router::defaultRouteClass('DashedRoute');
         Router::connect('/cake/:controller', ['action' => 'cake']);
         $result = Router::url(['controller' => 'FooBar', 'action' => 'cake']);
-        $this->assertEquals('/cake/foo-bar', $result);
+        $this->assertSame('/cake/foo-bar', $result);
 
         $result = Router::url(['controller' => 'FooBar', 'action' => 'index']);
-        $this->assertEquals('/FooBar', $result);
+        $this->assertSame('/FooBar', $result);
 
         Router::reload();
         Router::defaultRouteClass('DashedRoute');
@@ -3414,26 +3040,7 @@ class RouterTest extends TestCase
         });
 
         $result = Router::url(['controller' => 'FooBar', 'action' => 'index']);
-        $this->assertEquals('/foo-bar', $result);
-    }
-
-    /**
-     * Test generation of routes with collisions between the query string
-     * and other url params
-     *
-     * @return void
-     */
-    public function testUrlWithCollidingQueryString()
-    {
-        Router::connect('/:controller/:action/:id');
-
-        $query = ['controller' => 'Foo', 'action' => 'bar', 'id' => 100];
-        $result = Router::url(['controller' => 'posts', 'action' => 'view', 'id' => 1, '?' => $query]);
-        $this->assertEquals('/posts/view/1?controller=Foo&action=bar&id=100', $result);
-
-        $query = ['_host' => 'foo.bar', '_ssl' => 0, '_scheme' => 'ftp://', '_base' => 'baz', '_port' => '15'];
-        $result = Router::url(['controller' => 'posts', 'action' => 'view', 'id' => 1, '?' => $query]);
-        $this->assertEquals('/posts/view/1?_host=foo.bar&_ssl=0&_scheme=ftp%3A%2F%2F&_base=baz&_port=15', $result);
+        $this->assertSame('/foo-bar', $result);
     }
 
     /**
@@ -3446,17 +3053,17 @@ class RouterTest extends TestCase
         Router::connect('/:controller/:action/*');
         $request = new ServerRequest([
             'base' => '/subdir',
-            'url' => 'articles/view/1'
+            'url' => 'articles/view/1',
         ]);
-        Router::setRequestContext($request);
-        $result = Router::url(['controller' => 'things', 'action' => 'add']);
-        $this->assertEquals('/subdir/things/add', $result);
+        Router::setRequest($request);
+        $result = Router::url(['controller' => 'Things', 'action' => 'add']);
+        $this->assertSame('/subdir/Things/add', $result);
 
-        $result = Router::url(['controller' => 'things', 'action' => 'add'], true);
-        $this->assertEquals('http://localhost/subdir/things/add', $result);
+        $result = Router::url(['controller' => 'Things', 'action' => 'add'], true);
+        $this->assertSame('http://localhost/subdir/Things/add', $result);
 
         $result = Router::url('/pages/home');
-        $this->assertEquals('/subdir/pages/home', $result);
+        $this->assertSame('/subdir/pages/home', $result);
     }
 
     /**
@@ -3477,16 +3084,16 @@ class RouterTest extends TestCase
 
         Router::connect('/:controller/:action/*');
         $request = ServerRequestFactory::fromGlobals($server);
-        Router::setRequestContext($request);
+        Router::setRequest($request);
 
-        $result = Router::url(['controller' => 'things', 'action' => 'add']);
-        $this->assertEquals('/subdir/things/add', $result);
+        $result = Router::url(['controller' => 'Things', 'action' => 'add']);
+        $this->assertSame('/subdir/Things/add', $result);
 
-        $result = Router::url(['controller' => 'things', 'action' => 'add'], true);
-        $this->assertEquals('http://localhost/subdir/things/add', $result);
+        $result = Router::url(['controller' => 'Things', 'action' => 'add'], true);
+        $this->assertSame('http://localhost/subdir/Things/add', $result);
 
         $result = Router::url('/pages/home');
-        $this->assertEquals('/subdir/pages/home', $result);
+        $this->assertSame('/subdir/pages/home', $result);
     }
 
     /**
@@ -3514,7 +3121,7 @@ class RouterTest extends TestCase
 
         $builder = Router::createRouteBuilder('/', [
             'routeClass' => 'InflectedRoute',
-            'extensions' => ['json']
+            'extensions' => ['json'],
         ]);
         $this->assertInstanceOf(RouteBuilder::class, $builder);
         $this->assertSame(['json'], $builder->getExtensions());
@@ -3531,14 +3138,160 @@ class RouterTest extends TestCase
         $result = Router::parseRequest($this->makeRequest('/admin/articles/view', 'GET'));
         $expected = [
             'pass' => [],
-            'prefix' => 'admin',
+            'prefix' => 'Admin',
             'controller' => 'Articles',
             'action' => 'view',
             'plugin' => null,
-            '_matchedRoute' => '/admin/articles/view'
+            '_matchedRoute' => '/admin/articles/view',
 
         ];
         $this->assertEquals($result, $expected);
+    }
+
+    /**
+     * test url() with a string route path
+     *
+     * @return void
+     */
+    public function testUrlGenerationWithPathUrl()
+    {
+        Router::connect('/articles', 'Articles::index');
+        Router::connect('/articles/view/*', 'Articles::view');
+        Router::connect('/article/{slug}', 'Articles::read');
+        Router::connect('/admin/articles', 'Admin/Articles::index');
+        Router::connect('/cms/articles', 'Cms.Articles::index');
+        Router::connect('/cms/admin/articles', 'Cms.Admin/Articles::index');
+
+        $result = Router::pathUrl('Articles::index');
+        $expected = '/articles';
+        $this->assertSame($result, $expected);
+
+        $result = Router::pathUrl('Articles::view', [3]);
+        $expected = '/articles/view/3';
+        $this->assertSame($result, $expected);
+
+        $result = Router::pathUrl('Articles::read', ['slug' => 'title']);
+        $expected = '/article/title';
+        $this->assertSame($result, $expected);
+
+        $result = Router::pathUrl('Admin/Articles::index');
+        $expected = '/admin/articles';
+        $this->assertSame($result, $expected);
+
+        $result = Router::pathUrl('Cms.Admin/Articles::index');
+        $expected = '/cms/admin/articles';
+        $this->assertSame($result, $expected);
+
+        $result = Router::pathUrl('Cms.Articles::index');
+        $expected = '/cms/articles';
+        $this->assertSame($result, $expected);
+    }
+
+    /**
+     * test url() with a string route path doesn't take parameters from current request
+     *
+     * @return void
+     */
+    public function testUrlGenerationWithRoutePathWithContext()
+    {
+        Router::connect('/articles', 'Articles::index');
+        Router::connect('/articles/view/*', 'Articles::view');
+        Router::connect('/admin/articles', 'Admin/Articles::index');
+        Router::connect('/cms/articles', 'Cms.Articles::index');
+        Router::connect('/cms/admin/articles', 'Cms.Admin/Articles::index');
+
+        $request = new ServerRequest([
+            'params' => [
+                'plugin' => 'Cms',
+                'prefix' => 'Admin',
+                'controller' => 'Articles',
+                'action' => 'edit',
+                'pass' => ['3'],
+            ],
+            'url' => '/admin/articles/edit/3',
+        ]);
+        Router::setRequest($request);
+
+        $expected = '/articles';
+        $result = Router::pathUrl('Articles::index');
+        $this->assertSame($result, $expected);
+        $result = Router::url(['_path' => 'Articles::index']);
+        $this->assertSame($result, $expected);
+
+        $expected = '/articles/view/3';
+        $result = Router::pathUrl('Articles::view', [3]);
+        $this->assertSame($result, $expected);
+        $result = Router::url(['_path' => 'Articles::view', 3]);
+        $this->assertSame($result, $expected);
+
+        $expected = '/admin/articles';
+        $result = Router::pathUrl('Admin/Articles::index');
+        $this->assertSame($result, $expected);
+        $result = Router::url(['_path' => 'Admin/Articles::index']);
+        $this->assertSame($result, $expected);
+
+        $expected = '/cms/admin/articles';
+        $result = Router::pathUrl('Cms.Admin/Articles::index');
+        $this->assertSame($result, $expected);
+        $result = Router::url(['_path' => 'Cms.Admin/Articles::index']);
+        $this->assertSame($result, $expected);
+
+        $expected = '/cms/articles';
+        $result = Router::pathUrl('Cms.Articles::index');
+        $this->assertSame($result, $expected);
+        $result = Router::url(['_path' => 'Cms.Articles::index']);
+        $this->assertSame($result, $expected);
+    }
+
+    /**
+     * @return array
+     */
+    public function invalidRoutePathParametersArrayProvider()
+    {
+        return [
+            [['plugin' => false]],
+            [['plugin' => 'Cms']],
+            [['prefix' => false]],
+            [['prefix' => 'Manager']],
+            [['controller' => 'Bookmarks']],
+            [['controller' => 'Articles']],
+            [['action' => 'edit']],
+            [['action' => 'index']],
+        ];
+    }
+
+    /**
+     * Test url() doesn't let override parts of string route path
+     *
+     * @param array $params
+     * @return void
+     * @dataProvider invalidRoutePathParametersArrayProvider
+     */
+    public function testUrlGenerationOverridingShortString(array $params)
+    {
+        Router::connect('/articles', 'Articles::index');
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('cannot be used when defining route targets with a string route path.');
+
+        Router::pathUrl('Articles::index', $params);
+    }
+
+    /**
+     * Test url() doesn't let override parts of string route path from `_path` key
+     *
+     * @param array $params
+     * @return void
+     * @dataProvider invalidRoutePathParametersArrayProvider
+     */
+    public function testUrlGenerationOverridingPathKey(array $params)
+    {
+        Router::connect('/articles', 'Articles::index');
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('cannot be used when defining route targets with a string route path.');
+
+        Router::url(['_path' => 'Articles::index'] + $params);
     }
 
     /**

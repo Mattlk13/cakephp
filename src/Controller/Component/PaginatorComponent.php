@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -18,6 +20,7 @@ use Cake\Controller\Component;
 use Cake\Controller\ComponentRegistry;
 use Cake\Datasource\Exception\PageOutOfBoundsException;
 use Cake\Datasource\Paginator;
+use Cake\Datasource\ResultSetInterface;
 use Cake\Http\Exception\NotFoundException;
 use InvalidArgumentException;
 
@@ -29,12 +32,11 @@ use InvalidArgumentException;
  *
  * You configure pagination when calling paginate(). See that method for more details.
  *
- * @link https://book.cakephp.org/3.0/en/controllers/components/pagination.html
+ * @link https://book.cakephp.org/4/en/controllers/components/pagination.html
  * @mixin \Cake\Datasource\Paginator
  */
 class PaginatorComponent extends Component
 {
-
     /**
      * Default pagination settings.
      *
@@ -44,7 +46,7 @@ class PaginatorComponent extends Component
      * - `maxLimit` - The maximum limit users can choose to view. Defaults to 100
      * - `limit` - The initial number of items per page. Defaults to 20.
      * - `page` - The starting page, defaults to 1.
-     * - `whitelist` - A list of parameters users are allowed to set using request
+     * - `allowedParameters` - A list of parameters users are allowed to set using request
      *   parameters. Modifying this list will allow users to have more influence
      *   over pagination, be careful with what you permit.
      *
@@ -54,7 +56,7 @@ class PaginatorComponent extends Component
         'page' => 1,
         'limit' => 20,
         'maxLimit' => 100,
-        'whitelist' => ['limit', 'sort', 'page', 'direction']
+        'allowedParameters' => ['limit', 'sort', 'page', 'direction'],
     ];
 
     /**
@@ -65,7 +67,7 @@ class PaginatorComponent extends Component
     protected $_paginator;
 
     /**
-     * {@inheritDoc}
+     * @inheritDoc
      */
     public function __construct(ComponentRegistry $registry, array $config = [])
     {
@@ -87,7 +89,7 @@ class PaginatorComponent extends Component
      *
      * @return array
      */
-    public function implementedEvents()
+    public function implementedEvents(): array
     {
         return [];
     }
@@ -131,19 +133,19 @@ class PaginatorComponent extends Component
      *
      * By default CakePHP will automatically allow sorting on any column on the table object being
      * paginated. Often times you will want to allow sorting on either associated columns or calculated
-     * fields. In these cases you will need to define a whitelist of all the columns you wish to allow
-     * sorting on. You can define the whitelist in the `$settings` parameter:
+     * fields. In these cases you will need to define an allowed list of fields you wish to allow
+     * sorting on. You can define the allowed fields in the `$settings` parameter:
      *
      * ```
      * $settings = [
      *   'Articles' => [
      *     'finder' => 'custom',
-     *     'sortWhitelist' => ['title', 'author_id', 'comment_count'],
+     *     'sortableFields' => ['title', 'author_id', 'comment_count'],
      *   ]
      * ];
      * ```
      *
-     * Passing an empty array as whitelist disallows sorting altogether.
+     * Passing an empty array as allowed list disallows sorting altogether.
      *
      * ### Paginating with custom finders
      *
@@ -185,12 +187,12 @@ class PaginatorComponent extends Component
      * /dashboard?articles[page]=1&tags[page]=2
      * ```
      *
-     * @param \Cake\Datasource\RepositoryInterface|\Cake\Datasource\QueryInterface $object The table or query to paginate.
+     * @param \Cake\Datasource\RepositoryInterface|\Cake\Datasource\QueryInterface $object Table or query to paginate.
      * @param array $settings The settings/configuration used for pagination.
      * @return \Cake\Datasource\ResultSetInterface Query results
      * @throws \Cake\Http\Exception\NotFoundException
      */
-    public function paginate($object, array $settings = [])
+    public function paginate(object $object, array $settings = []): ResultSetInterface
     {
         $request = $this->_registry->getController()->getRequest();
 
@@ -220,14 +222,14 @@ class PaginatorComponent extends Component
      * - Request parameters
      *
      * The result of this method is the aggregate of all the option sets combined together. You can change
-     * config value `whitelist` to modify which options/values can be set using request parameters.
+     * config value `allowedParameters` to modify which options/values can be set using request parameters.
      *
      * @param string $alias Model alias being paginated, if the general settings has a key with this value
      *   that key's settings will be used for pagination instead of the general ones.
      * @param array $settings The settings to merge with the request data.
      * @return array Array of merged options.
      */
-    public function mergeOptions($alias, $settings)
+    public function mergeOptions(string $alias, array $settings): array
     {
         $request = $this->_registry->getController()->getRequest();
 
@@ -241,7 +243,7 @@ class PaginatorComponent extends Component
      * Set paginator instance.
      *
      * @param \Cake\Datasource\Paginator $paginator Paginator instance.
-     * @return self
+     * @return $this
      */
     public function setPaginator(Paginator $paginator)
     {
@@ -255,7 +257,7 @@ class PaginatorComponent extends Component
      *
      * @return \Cake\Datasource\Paginator
      */
-    public function getPaginator()
+    public function getPaginator(): Paginator
     {
         return $this->_paginator;
     }
@@ -265,33 +267,13 @@ class PaginatorComponent extends Component
      *
      * @return void
      */
-    protected function _setPagingParams()
+    protected function _setPagingParams(): void
     {
         $controller = $this->getController();
         $request = $controller->getRequest();
-        $paging = $this->_paginator->getPagingParams() + (array)$request->getParam('paging', []);
+        $paging = $this->_paginator->getPagingParams() + (array)$request->getAttribute('paging', []);
 
-        $controller->setRequest($request->withParam('paging', $paging));
-    }
-
-    /**
-     * Proxy getting/setting config options to Paginator.
-     *
-     * @deprecated 3.5.0 use setConfig()/getConfig() instead.
-     * @param string|array|null $key The key to get/set, or a complete array of configs.
-     * @param mixed|null $value The value to set.
-     * @param bool $merge Whether to recursively merge or overwrite existing config, defaults to true.
-     * @return mixed Config value being read, or the object itself on write operations.
-     */
-    public function config($key = null, $value = null, $merge = true)
-    {
-        deprecationWarning('PaginatorComponent::config() is deprecated. Use getConfig()/setConfig() instead.');
-        $return = $this->_paginator->config($key, $value, $merge);
-        if ($return instanceof Paginator) {
-            $return = $this;
-        }
-
-        return $return;
+        $controller->setRequest($request->withAttribute('paging', $paging));
     }
 
     /**
@@ -316,7 +298,7 @@ class PaginatorComponent extends Component
      * @param mixed $default The return value when the key does not exist.
      * @return mixed Config value being read.
      */
-    public function getConfig($key = null, $default = null)
+    public function getConfig(?string $key = null, $default = null)
     {
         return $this->_paginator->getConfig($key, $default);
     }
@@ -342,8 +324,8 @@ class PaginatorComponent extends Component
      * @param array $args Method arguments.
      * @return mixed
      */
-    public function __call($method, $args)
+    public function __call(string $method, array $args)
     {
-        return call_user_func_array([$this->_paginator, $method], $args);
+        return $this->_paginator->{$method}(...$args);
     }
 }

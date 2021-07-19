@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -14,7 +16,6 @@
  */
 namespace Cake\I18n;
 
-use Aura\Intl\Package;
 use RuntimeException;
 
 /**
@@ -23,7 +24,6 @@ use RuntimeException;
  */
 class ChainMessagesLoader
 {
-
     /**
      * The list of callables to execute one after another for loading messages
      *
@@ -46,10 +46,10 @@ class ChainMessagesLoader
      * Executes this object returning the translations package as configured in
      * the chain.
      *
-     * @return \Aura\Intl\Package
+     * @return \Cake\I18n\Package
      * @throws \RuntimeException if any of the loaders in the chain is not a valid callable
      */
-    public function __invoke()
+    public function __invoke(): Package
     {
         foreach ($this->_loaders as $k => $loader) {
             if (!is_callable($loader)) {

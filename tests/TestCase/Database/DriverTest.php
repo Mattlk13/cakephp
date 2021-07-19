@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -16,8 +18,10 @@ namespace Cake\Test\TestCase\Database;
 
 use Cake\Database\Driver;
 use Cake\Database\Driver\Mysql;
+use Cake\Database\Exception\MissingConnectionException;
 use Cake\Database\Query;
 use Cake\Database\QueryCompiler;
+use Cake\Database\Schema\TableSchema;
 use Cake\Database\ValueBinder;
 use Cake\TestSuite\TestCase;
 use PDO;
@@ -28,9 +32,14 @@ use PDO;
 class DriverTest extends TestCase
 {
     /**
+     * @var \Cake\Database\Driver|\PHPUnit\Framework\MockObject\MockObject
+     */
+    protected $driver;
+
+    /**
      * Setup.
      */
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
 
@@ -45,10 +54,15 @@ class DriverTest extends TestCase
      */
     public function testConstructorException()
     {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Please pass "username" instead of "login" for connecting to the database');
         $arg = ['login' => 'Bear'];
-        $this->getMockForAbstractClass(Driver::class, [$arg]);
+        try {
+            $this->getMockForAbstractClass(Driver::class, [$arg]);
+        } catch (\Exception $e) {
+            $this->assertStringContainsString(
+                'Please pass "username" instead of "login" for connecting to the database',
+                $e->getMessage()
+            );
+        }
     }
 
     /**
@@ -89,7 +103,7 @@ class DriverTest extends TestCase
     {
         $connection = $this->getMockBuilder(PDO::class)
             ->disableOriginalConstructor()
-            ->setMethods(['getAttribute'])
+            ->onlyMethods(['getAttribute'])
             ->getMock();
 
         $connection
@@ -129,16 +143,16 @@ class DriverTest extends TestCase
 
         $connection = $this->getMockBuilder(PDO::class)
             ->disableOriginalConstructor()
-            ->setMethods(['quote'])
+            ->onlyMethods(['quote'])
             ->getMock();
 
         $connection
             ->expects($this->once())
             ->method('quote')
-            ->with($value, PDO::PARAM_STR);
+            ->with($value, PDO::PARAM_STR)
+            ->will($this->returnValue('string'));
 
         $this->driver->setConnection($connection);
-
         $this->driver->schemaValue($value);
     }
 
@@ -151,7 +165,7 @@ class DriverTest extends TestCase
     {
         $connection = $this->getMockBuilder(Mysql::class)
             ->disableOriginalConstructor()
-            ->setMethods(['lastInsertId'])
+            ->onlyMethods(['lastInsertId'])
             ->getMock();
 
         $connection
@@ -174,7 +188,7 @@ class DriverTest extends TestCase
 
         $connection = $this->getMockBuilder(PDO::class)
             ->disableOriginalConstructor()
-            ->setMethods(['query'])
+            ->onlyMethods(['query'])
             ->getMock();
 
         $connection
@@ -200,18 +214,6 @@ class DriverTest extends TestCase
 
         $this->driver->disableAutoQuoting();
         $this->assertFalse($this->driver->isAutoQuotingEnabled());
-
-        $this->driver->enableAutoQuoting('string');
-        $this->assertTrue($this->driver->isAutoQuotingEnabled());
-
-        $this->driver->enableAutoQuoting('0');
-        $this->assertFalse($this->driver->isAutoQuotingEnabled());
-
-        $this->driver->enableAutoQuoting(1);
-        $this->assertTrue($this->driver->isAutoQuotingEnabled());
-
-        $this->driver->enableAutoQuoting(0);
-        $this->assertFalse($this->driver->isAutoQuotingEnabled());
     }
 
     /**
@@ -222,16 +224,16 @@ class DriverTest extends TestCase
     public function testCompileQuery()
     {
         $compiler = $this->getMockBuilder(QueryCompiler::class)
-            ->setMethods(['compile'])
+            ->onlyMethods(['compile'])
             ->getMock();
 
         $compiler
             ->expects($this->once())
             ->method('compile')
-            ->willReturn(true);
+            ->willReturn('1');
 
         $driver = $this->getMockBuilder(Driver::class)
-            ->setMethods(['newCompiler', 'queryTranslator'])
+            ->onlyMethods(['newCompiler', 'queryTranslator'])
             ->getMockForAbstractClass();
 
         $driver
@@ -249,12 +251,13 @@ class DriverTest extends TestCase
         $query = $this->getMockBuilder(Query::class)
             ->disableOriginalConstructor()
             ->getMock();
+        $query->method('type')->will($this->returnValue('select'));
 
-        $result = $driver->compileQuery($query, new ValueBinder);
+        $result = $driver->compileQuery($query, new ValueBinder());
 
-        $this->assertInternalType('array', $result);
+        $this->assertIsArray($result);
         $this->assertSame($query, $result[0]);
-        $this->assertTrue($result[1]);
+        $this->assertSame('1', $result[1]);
     }
 
     /**
@@ -268,6 +271,19 @@ class DriverTest extends TestCase
     }
 
     /**
+     * Test newTableSchema().
+     *
+     * @return void
+     */
+    public function testNewTableSchema()
+    {
+        $tableName = 'articles';
+        $actual = $this->driver->newTableSchema($tableName);
+        $this->assertInstanceOf(TableSchema::class, $actual);
+        $this->assertSame($tableName, $actual->name());
+    }
+
+    /**
      * Test __destruct().
      *
      * @return void
@@ -277,7 +293,8 @@ class DriverTest extends TestCase
         $this->driver->setConnection(true);
         $this->driver->__destruct();
 
-        $this->assertNull($this->driver->getConnection());
+        $this->expectException(MissingConnectionException::class);
+        $this->driver->getConnection();
     }
 
     /**
@@ -293,7 +310,7 @@ class DriverTest extends TestCase
             [true, 'TRUE'],
             [1, '1'],
             ['0', '0'],
-            ['42', '42']
+            ['42', '42'],
         ];
     }
 }

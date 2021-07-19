@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -15,6 +17,7 @@
 namespace Cake\Test\TestCase\View\Widget;
 
 use Cake\TestSuite\TestCase;
+use Cake\View\Form\NullContext;
 use Cake\View\StringTemplate;
 use Cake\View\Widget\LabelWidget;
 
@@ -23,20 +26,19 @@ use Cake\View\Widget\LabelWidget;
  */
 class LabelWidgetTest extends TestCase
 {
-
     /**
      * setup method.
      *
      * @return void
      */
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
         $templates = [
             'label' => '<label{{attrs}}>{{text}}</label>',
         ];
         $this->templates = new StringTemplate($templates);
-        $this->context = $this->getMockBuilder('Cake\View\Form\ContextInterface')->getMock();
+        $this->context = new NullContext([]);
     }
 
     /**
@@ -54,7 +56,7 @@ class LabelWidgetTest extends TestCase
         $expected = [
             'label' => [],
             'My text',
-            '/label'
+            '/label',
         ];
         $this->assertHtml($expected, $result);
     }
@@ -76,7 +78,7 @@ class LabelWidgetTest extends TestCase
         $expected = [
             'label' => ['for' => 'Some > value'],
             'My > text',
-            '/label'
+            '/label',
         ];
         $this->assertHtml($expected, $result);
     }
@@ -99,7 +101,7 @@ class LabelWidgetTest extends TestCase
         $expected = [
             'label' => ['id' => 'some-id', 'data-foo' => 'value', 'for' => 'some-id'],
             'My &gt; text',
-            '/label'
+            '/label',
         ];
         $this->assertHtml($expected, $result);
     }
@@ -124,7 +126,7 @@ class LabelWidgetTest extends TestCase
         $expected = [
             'label' => ['custom' => 'value'],
             'Label Text',
-            '/label'
+            '/label',
         ];
         $this->assertHtml($expected, $result);
     }

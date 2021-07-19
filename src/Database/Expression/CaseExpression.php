@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -17,13 +19,13 @@ namespace Cake\Database\Expression;
 use Cake\Database\ExpressionInterface;
 use Cake\Database\Type\ExpressionTypeCasterTrait;
 use Cake\Database\ValueBinder;
+use Closure;
 
 /**
  * This class represents a SQL Case statement
  */
 class CaseExpression implements ExpressionInterface
 {
-
     use ExpressionTypeCasterTrait;
 
     /**
@@ -54,8 +56,9 @@ class CaseExpression implements ExpressionInterface
      *
      * @param array|\Cake\Database\ExpressionInterface $conditions The conditions to test. Must be a ExpressionInterface
      * instance, or an array of ExpressionInterface instances.
-     * @param array|\Cake\Database\ExpressionInterface $values associative array of values to be associated with the conditions
-     * passed in $conditions. If there are more $values than $conditions, the last $value is used as the `ELSE` value
+     * @param array|\Cake\Database\ExpressionInterface $values associative array of values to be associated with the
+     * conditions passed in $conditions. If there are more $values than $conditions,
+     * the last $value is used as the `ELSE` value.
      * @param array $types associative array of types to be associated with the values
      * passed in $values
      */
@@ -68,7 +71,7 @@ class CaseExpression implements ExpressionInterface
         if (is_array($conditions) && is_array($values) && count($values) > count($conditions)) {
             end($values);
             $key = key($values);
-            $this->elseValue($values[$key], isset($types[$key]) ? $types[$key] : null);
+            $this->elseValue($values[$key], $types[$key] ?? null);
         }
     }
 
@@ -77,10 +80,10 @@ class CaseExpression implements ExpressionInterface
      * Conditions must be a one dimensional array or a QueryExpression.
      * The trueValues must be a similar structure, but may contain a string value.
      *
-     * @param array|\Cake\Database\ExpressionInterface $conditions Must be a ExpressionInterface instance, or an array of ExpressionInterface instances.
+     * @param array|\Cake\Database\ExpressionInterface $conditions Must be a ExpressionInterface instance,
+     *   or an array of ExpressionInterface instances.
      * @param array|\Cake\Database\ExpressionInterface $values associative array of values of each condition
      * @param array $types associative array of types to be associated with the values
-     *
      * @return $this
      */
     public function add($conditions = [], $values = [], $types = [])
@@ -104,13 +107,12 @@ class CaseExpression implements ExpressionInterface
      * Iterates over the passed in conditions and ensures that there is a matching true value for each.
      * If no matching true value, then it is defaulted to '1'.
      *
-     * @param array|\Cake\Database\ExpressionInterface $conditions Must be a ExpressionInterface instance, or an array of ExpressionInterface instances.
-     * @param array|\Cake\Database\ExpressionInterface $values associative array of values of each condition
+     * @param array $conditions Array of ExpressionInterface instances.
+     * @param array $values associative array of values of each condition
      * @param array $types associative array of types to be associated with the values
-     *
      * @return void
      */
-    protected function _addExpressions($conditions, $values, $types)
+    protected function _addExpressions(array $conditions, array $values, array $types): void
     {
         $rawValues = array_values($values);
         $keyValues = array_keys($values);
@@ -127,7 +129,7 @@ class CaseExpression implements ExpressionInterface
             }
 
             $this->_conditions[] = $c;
-            $value = isset($rawValues[$k]) ? $rawValues[$k] : 1;
+            $value = $rawValues[$k] ?? 1;
 
             if ($value === 'literal') {
                 $value = $keyValues[$k];
@@ -141,7 +143,7 @@ class CaseExpression implements ExpressionInterface
                 continue;
             }
 
-            $type = isset($types[$k]) ? $types[$k] : null;
+            $type = $types[$k] ?? null;
 
             if ($type !== null && !$value instanceof ExpressionInterface) {
                 $value = $this->_castToExpression($value, $type);
@@ -161,10 +163,9 @@ class CaseExpression implements ExpressionInterface
      *
      * @param \Cake\Database\ExpressionInterface|string|array|null $value Value to set
      * @param string|null $type Type of value
-     *
      * @return void
      */
-    public function elseValue($value = null, $type = null)
+    public function elseValue($value = null, ?string $type = null): void
     {
         if (is_array($value)) {
             end($value);
@@ -186,17 +187,16 @@ class CaseExpression implements ExpressionInterface
      * Compiles the relevant parts into sql
      *
      * @param array|string|\Cake\Database\ExpressionInterface $part The part to compile
-     * @param \Cake\Database\ValueBinder $generator Sql generator
-     *
+     * @param \Cake\Database\ValueBinder $binder Sql generator
      * @return string
      */
-    protected function _compile($part, ValueBinder $generator)
+    protected function _compile($part, ValueBinder $binder): string
     {
         if ($part instanceof ExpressionInterface) {
-            $part = $part->sql($generator);
+            $part = $part->sql($binder);
         } elseif (is_array($part)) {
-            $placeholder = $generator->placeholder('param');
-            $generator->bind($placeholder, $part['value'], $part['type']);
+            $placeholder = $binder->placeholder('param');
+            $binder->bind($placeholder, $part['value'], $part['type']);
             $part = $placeholder;
         }
 
@@ -206,21 +206,20 @@ class CaseExpression implements ExpressionInterface
     /**
      * Converts the Node into a SQL string fragment.
      *
-     * @param \Cake\Database\ValueBinder $generator Placeholder generator object
-     *
+     * @param \Cake\Database\ValueBinder $binder Placeholder generator object
      * @return string
      */
-    public function sql(ValueBinder $generator)
+    public function sql(ValueBinder $binder): string
     {
         $parts = [];
         $parts[] = 'CASE';
         foreach ($this->_conditions as $k => $part) {
             $value = $this->_values[$k];
-            $parts[] = 'WHEN ' . $this->_compile($part, $generator) . ' THEN ' . $this->_compile($value, $generator);
+            $parts[] = 'WHEN ' . $this->_compile($part, $binder) . ' THEN ' . $this->_compile($value, $binder);
         }
         if ($this->_elseValue !== null) {
             $parts[] = 'ELSE';
-            $parts[] = $this->_compile($this->_elseValue, $generator);
+            $parts[] = $this->_compile($this->_elseValue, $binder);
         }
         $parts[] = 'END';
 
@@ -228,22 +227,23 @@ class CaseExpression implements ExpressionInterface
     }
 
     /**
-     * {@inheritDoc}
-     *
+     * @inheritDoc
      */
-    public function traverse(callable $visitor)
+    public function traverse(Closure $callback)
     {
         foreach (['_conditions', '_values'] as $part) {
             foreach ($this->{$part} as $c) {
                 if ($c instanceof ExpressionInterface) {
-                    $visitor($c);
-                    $c->traverse($visitor);
+                    $callback($c);
+                    $c->traverse($callback);
                 }
             }
         }
         if ($this->_elseValue instanceof ExpressionInterface) {
-            $visitor($this->_elseValue);
-            $this->_elseValue->traverse($visitor);
+            $callback($this->_elseValue);
+            $this->_elseValue->traverse($callback);
         }
+
+        return $this;
     }
 }

@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -15,6 +17,7 @@
 namespace TestApp;
 
 use Cake\Http\BaseApplication;
+use Cake\Http\MiddlewareQueue;
 use Cake\Routing\Middleware\RoutingMiddleware;
 
 /**
@@ -34,20 +37,19 @@ class ApplicationWithDefaultRoutes extends BaseApplication
      *
      * @return void
      */
-    public function bootstrap()
+    public function bootstrap(): void
     {
         // Do nothing.
     }
 
     /**
-     * @param \Cake\Http\MiddlewareQueue $middlewareQueue
-     *
+     * @param \Cake\Http\MiddlewareQueue $middlewareQueueQueue
      * @return \Cake\Http\MiddlewareQueue
      */
-    public function middleware($middlewareQueue)
+    public function middleware(MiddlewareQueue $middlewareQueueQueue): MiddlewareQueue
     {
-        $middlewareQueue->add(new RoutingMiddleware($this));
+        $middlewareQueueQueue->add(new RoutingMiddleware($this));
 
-        return $middlewareQueue;
+        return $middlewareQueueQueue;
     }
 }

@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) :  Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -22,7 +24,6 @@ use InvalidArgumentException;
  */
 class ConsoleLog extends BaseLog
 {
-
     /**
      * Default config for this class
      *
@@ -33,6 +34,7 @@ class ConsoleLog extends BaseLog
         'levels' => null,
         'scopes' => [],
         'outputAs' => null,
+        'dateFormat' => 'Y-m-d H:i:s',
     ];
 
     /**
@@ -51,6 +53,7 @@ class ConsoleLog extends BaseLog
      * - `scopes` string or array, scopes the engine is interested in
      * - `stream` the path to save logs on.
      * - `outputAs` integer or ConsoleOutput::[RAW|PLAIN|COLOR]
+     * - `dateFormat` PHP date() format.
      *
      * @param array $config Options for the FileLog, see above.
      * @throws \InvalidArgumentException
@@ -76,16 +79,17 @@ class ConsoleLog extends BaseLog
     /**
      * Implements writing to console.
      *
-     * @param string $level The severity level of log you are making.
+     * @param mixed $level The severity level of log you are making.
      * @param string $message The message you want to log.
      * @param array $context Additional information about the logged message
-     * @return bool success of write.
+     * @return void success of write.
+     * @see Cake\Log\Log::$_levels
      */
     public function log($level, $message, array $context = [])
     {
         $message = $this->_format($message, $context);
-        $output = date('Y-m-d H:i:s') . ' ' . ucfirst($level) . ': ' . $message;
+        $output = $this->_getFormattedDate() . ' ' . ucfirst($level) . ': ' . $message;
 
-        return (bool)$this->_output->write(sprintf('<%s>%s</%s>', $level, $output, $level));
+        $this->_output->write(sprintf('<%s>%s</%s>', $level, $output, $level));
     }
 }

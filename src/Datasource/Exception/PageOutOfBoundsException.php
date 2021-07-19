@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (http://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (http://cakefoundation.org)
@@ -12,20 +14,15 @@
  */
 namespace Cake\Datasource\Exception;
 
-use Cake\Core\Exception\Exception;
+use Cake\Core\Exception\CakeException;
 
 /**
  * Exception raised when requested page number does not exist.
  */
-class PageOutOfBoundsException extends Exception
+class PageOutOfBoundsException extends CakeException
 {
     /**
-     * {@inheritDoc}
+     * @inheritDoc
      */
     protected $_messageTemplate = 'Page number %s could not be found.';
-
-    /**
-     * {@inheritDoc}
-     */
-    protected $_defaultCode = 404;
 }

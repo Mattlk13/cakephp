@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -14,10 +16,12 @@
  */
 namespace Cake\Test\TestCase\I18n;
 
+use Cake\Chronos\Chronos;
 use Cake\I18n\FrozenTime;
 use Cake\I18n\I18n;
 use Cake\I18n\Time;
 use Cake\TestSuite\TestCase;
+use IntlDateFormatter;
 
 /**
  * TimeTest class
@@ -29,7 +33,7 @@ class TimeTest extends TestCase
      *
      * @return void
      */
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
         $this->now = Time::getTestNow();
@@ -43,7 +47,7 @@ class TimeTest extends TestCase
      *
      * @return void
      */
-    public function tearDown()
+    public function tearDown(): void
     {
         parent::tearDown();
         Time::setTestNow($this->now);
@@ -57,16 +61,6 @@ class TimeTest extends TestCase
 
         date_default_timezone_set('UTC');
         I18n::setLocale(I18n::DEFAULT_LOCALE);
-    }
-
-    /**
-     * Restored the original system timezone
-     *
-     * @return void
-     */
-    protected function _restoreSystemTimezone()
-    {
-        date_default_timezone_set($this->_systemTimezoneIdentifier);
     }
 
     /**
@@ -87,14 +81,22 @@ class TimeTest extends TestCase
      */
     public function testConstructFromAnotherInstance($class)
     {
-        $time = '2015-01-22 10:33:44';
+        $time = '2015-01-22 10:33:44.123456';
         $frozen = new FrozenTime($time, 'America/Chicago');
         $subject = new $class($frozen);
-        $this->assertEquals($time, $subject->format('Y-m-d H:i:s'), 'frozen time construction');
+        $this->assertSame($time, $subject->format('Y-m-d H:i:s.u'), 'frozen time construction');
 
         $mut = new Time($time, 'America/Chicago');
         $subject = new $class($mut);
-        $this->assertEquals($time, $subject->format('Y-m-d H:i:s'), 'mutable time construction');
+        $this->assertSame($time, $subject->format('Y-m-d H:i:s.u'), 'mutable time construction');
+
+        $mut = new Chronos($time, 'America/Chicago');
+        $subject = new $class($mut);
+        $this->assertSame($time, $subject->format('Y-m-d H:i:s.u'), 'mutable time construction');
+
+        $mut = new \DateTime($time, new \DateTimeZone('America/Chicago'));
+        $subject = new $class($mut);
+        $this->assertSame($time, $subject->format('Y-m-d H:i:s.u'), 'mutable time construction');
     }
 
     /**
@@ -158,40 +160,41 @@ class TimeTest extends TestCase
             [
                 '+4 months +2 weeks +3 days',
                 '4 months, 2 weeks, 3 days',
-                '8 years'
+                '8 years',
             ],
             [
                 '+4 months +2 weeks +1 day',
                 '4 months, 2 weeks, 1 day',
-                '8 years'
+                '8 years',
             ],
             [
                 '+3 months +2 weeks',
                 '3 months, 2 weeks',
-                '8 years'
+                '8 years',
             ],
             [
                 '+3 months +2 weeks +1 day',
                 '3 months, 2 weeks, 1 day',
-                '8 years'
+                '8 years',
             ],
             [
                 '+1 months +1 week +1 day',
                 '1 month, 1 week, 1 day',
-                '8 years'
+                '8 years',
             ],
             [
                 '+2 months +2 days',
                 '2 months, 2 days',
-                '+2 months +2 days'
+                '+2 months +2 days',
             ],
             [
                 '+2 months +12 days',
                 '2 months, 1 week, 5 days',
-                '3 months'
+                '3 months',
             ],
         ];
     }
+
     /**
      * test the timezone option for timeAgoInWords
      *
@@ -205,10 +208,10 @@ class TimeTest extends TestCase
             [
                 'timezone' => 'America/Vancouver',
                 'end' => '+1month',
-                'format' => 'dd-MM-YYYY HH:mm:ss'
+                'format' => 'dd-MM-YYYY HH:mm:ss',
             ]
         );
-        $this->assertEquals('on 31-07-1990 13:33:00', $result);
+        $this->assertSame('on 31-07-1990 13:33:00', $result);
     }
 
     /**
@@ -236,19 +239,19 @@ class TimeTest extends TestCase
         $result = $time->timeAgoInWords([
             'relativeString' => 'at least %s ago',
             'accuracy' => ['year' => 'year'],
-            'end' => '+10 years'
+            'end' => '+10 years',
         ]);
         $expected = 'at least 8 years ago';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $time = new $class('+4 months +2 weeks +3 days');
         $result = $time->timeAgoInWords([
             'absoluteString' => 'exactly on %s',
             'accuracy' => ['year' => 'year'],
-            'end' => '+2 months'
+            'end' => '+2 months',
         ]);
         $expected = 'exactly on ' . date('n/j/y', strtotime('+4 months +2 weeks +3 days'));
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -262,60 +265,60 @@ class TimeTest extends TestCase
         $time = new $class('+8 years +4 months +2 weeks +3 days');
         $result = $time->timeAgoInWords([
             'accuracy' => ['year' => 'year'],
-            'end' => '+10 years'
+            'end' => '+10 years',
         ]);
         $expected = '8 years';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $time = new $class('+8 years +4 months +2 weeks +3 days');
         $result = $time->timeAgoInWords([
             'accuracy' => ['year' => 'month'],
-            'end' => '+10 years'
+            'end' => '+10 years',
         ]);
         $expected = '8 years, 4 months';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $time = new $class('+8 years +4 months +2 weeks +3 days');
         $result = $time->timeAgoInWords([
             'accuracy' => ['year' => 'week'],
-            'end' => '+10 years'
+            'end' => '+10 years',
         ]);
         $expected = '8 years, 4 months, 2 weeks';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $time = new $class('+8 years +4 months +2 weeks +3 days');
         $result = $time->timeAgoInWords([
             'accuracy' => ['year' => 'day'],
-            'end' => '+10 years'
+            'end' => '+10 years',
         ]);
         $expected = '8 years, 4 months, 2 weeks, 3 days';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $time = new $class('+1 years +5 weeks');
         $result = $time->timeAgoInWords([
             'accuracy' => ['year' => 'year'],
-            'end' => '+10 years'
+            'end' => '+10 years',
         ]);
         $expected = '1 year';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $time = new $class('+58 minutes');
         $result = $time->timeAgoInWords([
-            'accuracy' => 'hour'
+            'accuracy' => 'hour',
         ]);
         $expected = 'in about an hour';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $time = new $class('+23 hours');
         $result = $time->timeAgoInWords([
-            'accuracy' => 'day'
+            'accuracy' => 'day',
         ]);
         $expected = 'in about a day';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $time = new $class('+20 days');
         $result = $time->timeAgoInWords(['accuracy' => 'month']);
-        $this->assertEquals('in about a month', $result);
+        $this->assertSame('in about a month', $result);
     }
 
     /**
@@ -328,15 +331,15 @@ class TimeTest extends TestCase
     {
         $time = new $class('2007-9-25');
         $result = $time->timeAgoInWords(['format' => 'yyyy-MM-dd']);
-        $this->assertEquals('on 2007-09-25', $result);
+        $this->assertSame('on 2007-09-25', $result);
 
         $time = new $class('+2 weeks +2 days');
         $result = $time->timeAgoInWords(['format' => 'yyyy-MM-dd']);
-        $this->assertRegExp('/^2 weeks, [1|2] day(s)?$/', $result);
+        $this->assertMatchesRegularExpression('/^2 weeks, [1|2] day(s)?$/', $result);
 
         $time = new $class('+2 months +2 days');
         $result = $time->timeAgoInWords(['end' => '1 month', 'format' => 'yyyy-MM-dd']);
-        $this->assertEquals('on ' . date('Y-m-d', strtotime('+2 months +2 days')), $result);
+        $this->assertSame('on ' . date('Y-m-d', strtotime('+2 months +2 days')), $result);
     }
 
     /**
@@ -349,57 +352,57 @@ class TimeTest extends TestCase
     {
         $time = new $class('-2 months -2 days');
         $result = $time->timeAgoInWords(['end' => '3 month']);
-        $this->assertEquals('2 months, 2 days ago', $result);
+        $this->assertSame('2 months, 2 days ago', $result);
 
         $time = new $class('-2 months -2 days');
         $result = $time->timeAgoInWords(['end' => '3 month']);
-        $this->assertEquals('2 months, 2 days ago', $result);
+        $this->assertSame('2 months, 2 days ago', $result);
 
         $time = new $class('-2 months -2 days');
         $result = $time->timeAgoInWords(['end' => '1 month', 'format' => 'yyyy-MM-dd']);
-        $this->assertEquals('on ' . date('Y-m-d', strtotime('-2 months -2 days')), $result);
+        $this->assertSame('on ' . date('Y-m-d', strtotime('-2 months -2 days')), $result);
 
         $time = new $class('-2 years -5 months -2 days');
         $result = $time->timeAgoInWords(['end' => '3 years']);
-        $this->assertEquals('2 years, 5 months, 2 days ago', $result);
+        $this->assertSame('2 years, 5 months, 2 days ago', $result);
 
         $time = new $class('-2 weeks -2 days');
         $result = $time->timeAgoInWords(['format' => 'yyyy-MM-dd']);
-        $this->assertEquals('2 weeks, 2 days ago', $result);
+        $this->assertSame('2 weeks, 2 days ago', $result);
 
         $time = new $class('-3 years -12 months');
         $result = $time->timeAgoInWords();
         $expected = 'on ' . $time->format('n/j/y');
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $time = new $class('-1 month -1 week -6 days');
         $result = $time->timeAgoInWords(
             ['end' => '1 year', 'accuracy' => ['month' => 'month']]
         );
-        $this->assertEquals('1 month ago', $result);
+        $this->assertSame('1 month ago', $result);
 
         $time = new $class('-1 years -2 weeks -3 days');
         $result = $time->timeAgoInWords(
             ['accuracy' => ['year' => 'year']]
         );
         $expected = 'on ' . $time->format('n/j/y');
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $time = new $class('-13 months -5 days');
         $result = $time->timeAgoInWords(['end' => '2 years']);
-        $this->assertEquals('1 year, 1 month, 5 days ago', $result);
+        $this->assertSame('1 year, 1 month, 5 days ago', $result);
 
         $time = new $class('-58 minutes');
         $result = $time->timeAgoInWords(['accuracy' => 'hour']);
-        $this->assertEquals('about an hour ago', $result);
+        $this->assertSame('about an hour ago', $result);
 
         $time = new $class('-23 hours');
         $result = $time->timeAgoInWords(['accuracy' => 'day']);
-        $this->assertEquals('about a day ago', $result);
+        $this->assertSame('about a day ago', $result);
 
         $time = new $class('-20 days');
         $result = $time->timeAgoInWords(['accuracy' => 'month']);
-        $this->assertEquals('about a month ago', $result);
+        $this->assertSame('about a month ago', $result);
     }
 
     /**
@@ -415,10 +418,14 @@ class TimeTest extends TestCase
 
         $result = $time->nice('America/New_York');
         $this->assertTimeFormat('Apr 20, 2014, 4:00 PM', $result);
-        $this->assertEquals('UTC', $time->getTimezone()->getName());
+        $this->assertSame('UTC', $time->getTimezone()->getName());
 
         $this->assertTimeFormat('20 avr. 2014 20:00', $time->nice(null, 'fr-FR'));
         $this->assertTimeFormat('20 avr. 2014 16:00', $time->nice('America/New_York', 'fr-FR'));
+
+        // Test with custom default locale
+        $class::setDefaultLocale('fr-FR');
+        $this->assertTimeFormat('20 avr. 2014 20:00', $time->nice());
     }
 
     /**
@@ -430,52 +437,35 @@ class TimeTest extends TestCase
     public function testI18nFormat($class)
     {
         $time = new $class('Thu Jan 14 13:59:28 2010');
+
+        // Test the default format which should be SHORT
         $result = $time->i18nFormat();
         $expected = '1/14/10, 1:59 PM';
         $this->assertTimeFormat($expected, $result);
 
-        $result = $time->i18nFormat(\IntlDateFormatter::FULL, null, 'es-ES');
-        $expected = 'jueves, 14 de enero de 2010, 13:59:28 (GMT)';
+        // Test with a custom timezone
+        $result = $time->i18nFormat('HH:mm:ss', 'Australia/Sydney');
+        $expected = '00:59:28';
         $this->assertTimeFormat($expected, $result);
 
+        // Test using a time-specific format
         $format = [\IntlDateFormatter::NONE, \IntlDateFormatter::SHORT];
         $result = $time->i18nFormat($format);
         $expected = '1:59 PM';
         $this->assertTimeFormat($expected, $result);
 
-        $result = $time->i18nFormat('HH:mm:ss', 'Australia/Sydney');
-        $expected = '00:59:28';
+        // Test using a specific format, timezone and locale
+        $result = $time->i18nFormat(\IntlDateFormatter::FULL, null, 'es-ES');
+        $expected = 'jueves, 14 de enero de 2010, 13:59:28 (GMT)';
         $this->assertTimeFormat($expected, $result);
 
+        // Test with custom default locale
         $class::setDefaultLocale('fr-FR');
         $result = $time->i18nFormat(\IntlDateFormatter::FULL);
         $expected = 'jeudi 14 janvier 2010 13:59:28 UTC';
         $this->assertTimeFormat($expected, $result);
 
-        $result = $time->i18nFormat(\IntlDateFormatter::FULL, null, 'es-ES');
-        $expected = 'jueves, 14 de enero de 2010, 13:59:28 (GMT)';
-        $this->assertTimeFormat($expected, $result, 'Default locale should not be used');
-
-        $result = $time->i18nFormat(\IntlDateFormatter::FULL, null, 'fa-SA');
-        $expected = 'پنجشنبه ۱۴ ژانویهٔ ۲۰۱۰، ساعت ۱۳:۵۹:۲۸ GMT';
-        $this->assertTimeFormat($expected, $result, 'fa-SA locale should be used');
-
-        $result = $time->i18nFormat(\IntlDateFormatter::FULL, null, 'en-IR@calendar=persian');
-        $expected = 'Thursday, Dey 24, 1388 at 1:59:28 PM GMT';
-        $this->assertTimeFormat($expected, $result);
-
-        $result = $time->i18nFormat(\IntlDateFormatter::SHORT, null, 'fa-IR@calendar=persian');
-        $expected = '۱۳۸۸/۱۰/۲۴،‏ ۱۳:۵۹:۲۸ GMT';
-        $this->assertTimeFormat($expected, $result);
-
-        $result = $time->i18nFormat(\IntlDateFormatter::FULL, null, 'en-KW@calendar=islamic');
-        $expected = 'Thursday, Muharram 29, 1431 at 1:59:28 PM GMT';
-        $this->assertTimeFormat($expected, $result);
-
-        $result = $time->i18nFormat(\IntlDateFormatter::FULL, 'Asia/Tokyo', 'ja-JP@calendar=japanese');
-        $expected = '平成22年1月14日木曜日 22時59分28秒 日本標準時';
-        $this->assertTimeFormat($expected, $result);
-
+        // Test with a non-gregorian calendar in locale
         $result = $time->i18nFormat(\IntlDateFormatter::FULL, 'Asia/Tokyo', 'ja-JP@calendar=japanese');
         $expected = '平成22年1月14日木曜日 22時59分28秒 日本標準時';
         $this->assertTimeFormat($expected, $result);
@@ -494,10 +484,10 @@ class TimeTest extends TestCase
 
         $time = new Time(1556864870);
         I18n::setLocale('ar');
-        $this->assertEquals('٢٠١٩-٠٥-٠٣', $time->i18nFormat('yyyy-MM-dd'));
+        $this->assertSame('٢٠١٩-٠٥-٠٣', $time->i18nFormat('yyyy-MM-dd'));
 
         I18n::setLocale('en');
-        $this->assertEquals('2019-05-03', $time->i18nFormat('yyyy-MM-dd'));
+        $this->assertSame('2019-05-03', $time->i18nFormat('yyyy-MM-dd'));
 
         I18n::setLocale($locale);
     }
@@ -542,9 +532,9 @@ class TimeTest extends TestCase
     {
         $return = $class::listTimezones();
         $this->assertTrue(isset($return['Asia']['Asia/Bangkok']));
-        $this->assertEquals('Bangkok', $return['Asia']['Asia/Bangkok']);
+        $this->assertSame('Bangkok', $return['Asia']['Asia/Bangkok']);
         $this->assertTrue(isset($return['America']['America/Argentina/Buenos_Aires']));
-        $this->assertEquals('Argentina/Buenos_Aires', $return['America']['America/Argentina/Buenos_Aires']);
+        $this->assertSame('Argentina/Buenos_Aires', $return['America']['America/Argentina/Buenos_Aires']);
         $this->assertTrue(isset($return['UTC']['UTC']));
         $this->assertArrayNotHasKey('Cuba', $return);
         $this->assertArrayNotHasKey('US', $return);
@@ -555,16 +545,16 @@ class TimeTest extends TestCase
 
         $return = $class::listTimezones(null, null, ['abbr' => true]);
         $this->assertTrue(isset($return['Asia']['Asia/Jakarta']));
-        $this->assertEquals('Jakarta - WIB', $return['Asia']['Asia/Jakarta']);
-        $this->assertEquals('Regina - CST', $return['America']['America/Regina']);
+        $this->assertSame('Jakarta - WIB', $return['Asia']['Asia/Jakarta']);
+        $this->assertSame('Regina - CST', $return['America']['America/Regina']);
 
         $return = $class::listTimezones(null, null, [
             'abbr' => true,
             'before' => ' (',
             'after' => ')',
         ]);
-        $this->assertEquals('Jayapura (WIT)', $return['Asia']['Asia/Jayapura']);
-        $this->assertEquals('Regina (CST)', $return['America']['America/Regina']);
+        $this->assertSame('Jayapura (WIT)', $return['Asia']['Asia/Jayapura']);
+        $this->assertSame('Regina (CST)', $return['America']['America/Regina']);
 
         $return = $class::listTimezones('#^(America|Pacific)/#', null, false);
         $this->assertArrayHasKey('America/Argentina/Buenos_Aires', $return);
@@ -602,7 +592,6 @@ class TimeTest extends TestCase
     {
         return [
             [null],
-            [false],
             [''],
         ];
     }
@@ -616,7 +605,7 @@ class TimeTest extends TestCase
     public function testToStringInvalid($value)
     {
         $time = new Time($value);
-        $this->assertInternalType('string', (string)$time);
+        $this->assertIsString((string)$time);
         $this->assertNotEmpty((string)$time);
     }
 
@@ -629,7 +618,7 @@ class TimeTest extends TestCase
     public function testToStringInvalidFrozen($value)
     {
         $time = new FrozenTime($value);
-        $this->assertInternalType('string', (string)$time);
+        $this->assertIsString((string)$time);
         $this->assertNotEmpty((string)$time);
     }
 
@@ -644,11 +633,11 @@ class TimeTest extends TestCase
         $this->skipIf(DS === '\\', 'All zeros are valid on windows.');
         $this->skipIf(PHP_INT_SIZE === 4, 'IntlDateFormatter throws exceptions on 32-bit systems');
         $time = new $class('0000-00-00');
-        $this->assertInternalType('string', (string)$time);
+        $this->assertIsString((string)$time);
         $this->assertNotEmpty((string)$time);
 
         $time = new $class('0000-00-00 00:00:00');
-        $this->assertInternalType('string', (string)$time);
+        $this->assertIsString((string)$time);
         $this->assertNotEmpty((string)$time);
     }
 
@@ -663,34 +652,34 @@ class TimeTest extends TestCase
         $time = new $class('2014-04-20 10:10:10');
 
         $other = new $class('2014-04-27 10:10:10');
-        $this->assertEquals('1 week before', $time->diffForHumans($other));
+        $this->assertSame('1 week before', $time->diffForHumans($other));
 
         $other = new $class('2014-04-21 09:10:10');
-        $this->assertEquals('23 hours before', $time->diffForHumans($other));
+        $this->assertSame('23 hours before', $time->diffForHumans($other));
 
         $other = new $class('2014-04-13 09:10:10');
-        $this->assertEquals('1 week after', $time->diffForHumans($other));
+        $this->assertSame('1 week after', $time->diffForHumans($other));
 
         $other = new $class('2014-04-06 09:10:10');
-        $this->assertEquals('2 weeks after', $time->diffForHumans($other));
+        $this->assertSame('2 weeks after', $time->diffForHumans($other));
 
         $other = new $class('2014-04-21 10:10:10');
-        $this->assertEquals('1 day before', $time->diffForHumans($other));
+        $this->assertSame('1 day before', $time->diffForHumans($other));
 
         $other = new $class('2014-04-22 10:10:10');
-        $this->assertEquals('2 days before', $time->diffForHumans($other));
+        $this->assertSame('2 days before', $time->diffForHumans($other));
 
         $other = new $class('2014-04-20 10:11:10');
-        $this->assertEquals('1 minute before', $time->diffForHumans($other));
+        $this->assertSame('1 minute before', $time->diffForHumans($other));
 
         $other = new $class('2014-04-20 10:12:10');
-        $this->assertEquals('2 minutes before', $time->diffForHumans($other));
+        $this->assertSame('2 minutes before', $time->diffForHumans($other));
 
         $other = new $class('2014-04-20 10:10:09');
-        $this->assertEquals('1 second after', $time->diffForHumans($other));
+        $this->assertSame('1 second after', $time->diffForHumans($other));
 
         $other = new $class('2014-04-20 10:10:08');
-        $this->assertEquals('2 seconds after', $time->diffForHumans($other));
+        $this->assertSame('2 seconds after', $time->diffForHumans($other));
     }
 
     /**
@@ -703,13 +692,13 @@ class TimeTest extends TestCase
     {
         Time::setTestNow(new $class('2015-12-12 10:10:10'));
         $time = new $class('2014-04-20 10:10:10');
-        $this->assertEquals('1 year', $time->diffForHumans(null, ['absolute' => true]));
+        $this->assertSame('1 year', $time->diffForHumans(null, true));
 
         $other = new $class('2014-04-27 10:10:10');
-        $this->assertEquals('1 week', $time->diffForHumans($other, ['absolute' => true]));
+        $this->assertSame('1 week', $time->diffForHumans($other, true));
 
         $time = new $class('2016-04-20 10:10:10');
-        $this->assertEquals('4 months', $time->diffForHumans(null, ['absolute' => true]));
+        $this->assertSame('4 months', $time->diffForHumans(null, true));
     }
 
     /**
@@ -722,14 +711,14 @@ class TimeTest extends TestCase
     {
         Time::setTestNow(new $class('2015-12-12 10:10:10'));
         $time = new $class('2014-04-20 10:10:10');
-        $this->assertEquals('1 year ago', $time->diffForHumans());
+        $this->assertSame('1 year ago', $time->diffForHumans());
 
         $time = new $class('2016-04-20 10:10:10');
-        $this->assertEquals('4 months from now', $time->diffForHumans());
+        $this->assertSame('4 months from now', $time->diffForHumans());
     }
 
     /**
-     * Tests encoding a Time object as json
+     * Tests encoding a Time object as JSON
      *
      * @dataProvider classNameProvider
      * @return void
@@ -741,13 +730,13 @@ class TimeTest extends TestCase
         }
 
         $time = new $class('2014-04-20 10:10:10');
-        $this->assertEquals('"2014-04-20T10:10:10+00:00"', json_encode($time));
+        $this->assertSame('"2014-04-20T10:10:10+00:00"', json_encode($time));
 
         $class::setJsonEncodeFormat('yyyy-MM-dd HH:mm:ss');
-        $this->assertEquals('"2014-04-20 10:10:10"', json_encode($time));
+        $this->assertSame('"2014-04-20 10:10:10"', json_encode($time));
 
         $class::setJsonEncodeFormat($class::UNIX_TIMESTAMP_FORMAT);
-        $this->assertEquals('1397988610', json_encode($time));
+        $this->assertSame('1397988610', json_encode($time));
     }
 
     /**
@@ -765,8 +754,27 @@ class TimeTest extends TestCase
         $this->assertInstanceOf('DateTimeZone', $date->timezone);
 
         $result = json_encode($date);
-        $this->assertEquals('"2016-11-29T09:00:00+00:00"', $result);
+        $this->assertSame('"2016-11-29T09:00:00+00:00"', $result);
         $this->assertInstanceOf('DateTimeZone', $date->getTimezone());
+    }
+
+    /**
+     * Tests change JSON encoding format
+     *
+     * @dataProvider classNameProvider
+     * @return void
+     */
+    public function testSetJsonEncodeFormat($class)
+    {
+        $time = new $class('2014-04-20 10:10:10');
+
+        $class::setJsonEncodeFormat(static function ($t) {
+            return $t->format(DATE_ATOM);
+        });
+        $this->assertSame('"2014-04-20T10:10:10+00:00"', json_encode($time));
+
+        $class::setJsonEncodeFormat("yyyy-MM-dd'T'HH':'mm':'ssZZZZZ");
+        $this->assertSame('"2014-04-20T10:10:10Z"', json_encode($time));
     }
 
     /**
@@ -779,9 +787,9 @@ class TimeTest extends TestCase
     {
         $time = new $class('2014-04-20 10:10:10');
         $expected = [
-            'time' => '2014-04-20T10:10:10+00:00',
+            'time' => '2014-04-20 10:10:10.000000+00:00',
             'timezone' => 'UTC',
-            'fixedNowTime' => $class::getTestNow()->toIso8601String()
+            'fixedNowTime' => $class::getTestNow()->format('Y-m-d\TH:i:s.uP'),
         ];
         $this->assertEquals($expected, $time->__debugInfo());
     }
@@ -796,16 +804,37 @@ class TimeTest extends TestCase
     {
         $time = $class::parseDateTime('01/01/1970 00:00am');
         $this->assertNotNull($time);
-        $this->assertEquals('1970-01-01 00:00', $time->format('Y-m-d H:i'));
+        $this->assertSame('1970-01-01 00:00', $time->format('Y-m-d H:i'));
+        $this->assertSame(date_default_timezone_get(), $time->tzName);
 
         $time = $class::parseDateTime('10/13/2013 12:54am');
         $this->assertNotNull($time);
-        $this->assertEquals('2013-10-13 00:54', $time->format('Y-m-d H:i'));
+        $this->assertSame('2013-10-13 00:54', $time->format('Y-m-d H:i'));
+        $this->assertSame(date_default_timezone_get(), $time->tzName);
+
+        // Default format does not include time zone in time string
+        // Time zone is ignored and is interpreted as default time zone
+        $time = $class::parseDateTime('10/13/2013 12:54am GMT+08:00');
+        $this->assertNotNull($time);
+        $this->assertSame('2013-10-13 00:54', $time->format('Y-m-d H:i'));
+        $this->assertSame(date_default_timezone_get(), $time->tzName);
+
+        // Unlike DateTime constructor, the instance is not created with the time zone
+        // in time string but converted to default time zone.
+        $time = $class::parseDateTime('10/13/2013 12:54:00am GMT+08:00', [IntlDateFormatter::SHORT, IntlDateFormatter::FULL]);
+        $this->assertNotNull($time);
+        $this->assertSame('2013-10-12 16:54', $time->format('Y-m-d H:i'));
+        $this->assertSame(date_default_timezone_get(), $time->tzName);
+
+        $time = $class::parseDateTime('10/13/2013 12:54am', null, 'Europe/London');
+        $this->assertNotNull($time);
+        $this->assertSame('2013-10-13 00:54', $time->format('Y-m-d H:i'));
+        $this->assertSame('Europe/London', $time->tzName);
 
         $class::setDefaultLocale('fr-FR');
         $time = $class::parseDateTime('13 10, 2013 12:54');
         $this->assertNotNull($time);
-        $this->assertEquals('2013-10-13 12:54', $time->format('Y-m-d H:i'));
+        $this->assertSame('2013-10-13 12:54', $time->format('Y-m-d H:i'));
 
         $time = $class::parseDateTime('13 foo 10 2013 12:54');
         $this->assertNull($time);
@@ -821,23 +850,23 @@ class TimeTest extends TestCase
     {
         $time = $class::parseDate('10/13/2013 12:54am');
         $this->assertNotNull($time);
-        $this->assertEquals('2013-10-13 00:00', $time->format('Y-m-d H:i'));
+        $this->assertSame('2013-10-13 00:00', $time->format('Y-m-d H:i'));
 
         $time = $class::parseDate('10/13/2013');
         $this->assertNotNull($time);
-        $this->assertEquals('2013-10-13 00:00', $time->format('Y-m-d H:i'));
+        $this->assertSame('2013-10-13 00:00', $time->format('Y-m-d H:i'));
 
         $class::setDefaultLocale('fr-FR');
         $time = $class::parseDate('13 10, 2013 12:54');
         $this->assertNotNull($time);
-        $this->assertEquals('2013-10-13 00:00', $time->format('Y-m-d H:i'));
+        $this->assertSame('2013-10-13 00:00', $time->format('Y-m-d H:i'));
 
         $time = $class::parseDate('13 foo 10 2013 12:54');
         $this->assertNull($time);
 
         $time = $class::parseDate('13 10, 2013', 'dd M, y');
         $this->assertNotNull($time);
-        $this->assertEquals('2013-10-13', $time->format('Y-m-d'));
+        $this->assertSame('2013-10-13', $time->format('Y-m-d'));
     }
 
     /**
@@ -850,15 +879,34 @@ class TimeTest extends TestCase
     {
         $time = $class::parseTime('12:54am');
         $this->assertNotNull($time);
-        $this->assertEquals('00:54:00', $time->format('H:i:s'));
+        $this->assertSame('00:54:00', $time->format('H:i:s'));
 
         $class::setDefaultLocale('fr-FR');
         $time = $class::parseTime('23:54');
         $this->assertNotNull($time);
-        $this->assertEquals('23:54:00', $time->format('H:i:s'));
+        $this->assertSame('23:54:00', $time->format('H:i:s'));
 
         $time = $class::parseTime('31c2:54');
         $this->assertNull($time);
+    }
+
+    /**
+     * Tests disabling leniency when parsing locale format.
+     *
+     * @dataProvider classNameProvider
+     * @return void
+     */
+    public function testLenientParseDate($class)
+    {
+        $class::setDefaultLocale('pt_BR');
+
+        $class::disableLenientParsing();
+        $time = $class::parseDate('04/21/2013');
+        $this->assertSame(null, $time);
+
+        $class::enableLenientParsing();
+        $time = $class::parseDate('04/21/2013');
+        $this->assertSame('2014-09-04', $time->format('Y-m-d'));
     }
 
     /**
@@ -872,7 +920,7 @@ class TimeTest extends TestCase
         I18n::setLocale('ru_RU');
         $time = new $class('5 days ago');
         $result = $time->timeAgoInWords();
-        $this->assertEquals('5 days ago', $result);
+        $this->assertSame('5 days ago', $result);
     }
 
     /**
@@ -886,7 +934,7 @@ class TimeTest extends TestCase
         date_default_timezone_set('Europe/Paris');
         $class::setDefaultLocale('fr-FR');
         $result = $class::parseDate('12/03/2015');
-        $this->assertEquals('2015-03-12', $result->format('Y-m-d'));
+        $this->assertSame('2015-03-12', $result->format('Y-m-d'));
         $this->assertEquals(new \DateTimeZone('Europe/Paris'), $result->tz);
     }
 
@@ -900,27 +948,6 @@ class TimeTest extends TestCase
     {
         $class::setDefaultLocale('fr-FR');
         $this->assertSame('fr-FR', $class::getDefaultLocale());
-    }
-
-    /**
-     * Tests the default locale setter.
-     *
-     * @dataProvider classNameProvider
-     * @return void
-     */
-    public function testDefaultLocaleEffectsFormatting($class)
-    {
-        $result = $class::parseDate('12/03/2015');
-        $this->assertRegExp('/Dec 3, 2015[ ,]+12:00 AM/', $result->nice());
-
-        $class::setDefaultLocale('fr-FR');
-
-        $result = $class::parseDate('12/03/2015');
-        $this->assertRegexp('/12 mars 2015 (?:à )?00:00/', $result->nice());
-
-        $expected = 'Y-m-d';
-        $result = $class::parseDate('12/03/2015');
-        $this->assertEquals('2015-03-12', $result->format($expected));
     }
 
     /**
@@ -941,9 +968,6 @@ class TimeTest extends TestCase
         $result = str_replace('Coordinated Universal Time', 'GMT', $result);
 
         $result = str_replace([',', '(', ')', ' at', ' م.', ' ه‍.ش.', ' AP', ' AH', ' SAKA', 'à '], '', $result);
-        $result = str_replace(['گرینویچ'], 'GMT', $result);
-        $result = str_replace('زمان هماهنگ جهانی', 'GMT', $result);
-        $result = str_replace('همغږۍ نړیواله موده', 'GMT', $result);
         $result = str_replace(['  '], ' ', $result);
 
         $this->assertSame($expected, $result, $message);

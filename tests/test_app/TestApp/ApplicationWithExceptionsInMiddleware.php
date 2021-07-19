@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -16,6 +18,7 @@ namespace TestApp;
 
 use Cake\Error\Middleware\ErrorHandlerMiddleware;
 use Cake\Http\BaseApplication;
+use Cake\Http\MiddlewareQueue;
 use Cake\Routing\Middleware\RoutingMiddleware;
 use TestApp\Middleware\ThrowsExceptionMiddleware;
 
@@ -31,14 +34,14 @@ class ApplicationWithExceptionsInMiddleware extends BaseApplication
      *
      * @return void
      */
-    public function bootstrap()
+    public function bootstrap(): void
     {
         // Do nothing.
     }
 
-    public function middleware($middlewareQueue)
+    public function middleware(MiddlewareQueue $middlewareQueueQueue): MiddlewareQueue
     {
-        $middlewareQueue
+        $middlewareQueueQueue
             // Catch any exceptions in the lower layers,
             // and make an error page/response
             ->add(ErrorHandlerMiddleware::class)
@@ -49,6 +52,6 @@ class ApplicationWithExceptionsInMiddleware extends BaseApplication
             // Add routing middleware.
             ->add(new RoutingMiddleware($this));
 
-        return $middlewareQueue;
+        return $middlewareQueueQueue;
     }
 }

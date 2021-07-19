@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -14,22 +16,23 @@
  */
 namespace Cake\Test\TestCase\Database\Driver;
 
+use Cake\Database\Connection;
+use Cake\Database\Driver\Mysql;
 use Cake\Datasource\ConnectionManager;
 use Cake\TestSuite\TestCase;
 use PDO;
 
 /**
- * Tests Mysql driver
+ * Tests MySQL driver
  */
 class MysqlTest extends TestCase
 {
-
     /**
      * setup
      *
      * @return void
      */
-    public function setup()
+    public function setup(): void
     {
         parent::setUp();
         $config = ConnectionManager::getConfig('test');
@@ -37,14 +40,14 @@ class MysqlTest extends TestCase
     }
 
     /**
-     * Test connecting to Mysql with default configuration
+     * Test connecting to MySQL with default configuration
      *
      * @return void
      */
     public function testConnectionConfigDefault()
     {
         $driver = $this->getMockBuilder('Cake\Database\Driver\Mysql')
-            ->setMethods(['_connect', 'getConnection'])
+            ->onlyMethods(['_connect', 'getConnection'])
             ->getMock();
         $dsn = 'mysql:host=localhost;port=3306;dbname=cake;charset=utf8mb4';
         $expected = [
@@ -57,7 +60,7 @@ class MysqlTest extends TestCase
             'flags' => [],
             'encoding' => 'utf8mb4',
             'timezone' => null,
-            'init' => ['SET NAMES utf8mb4'],
+            'init' => [],
         ];
 
         $expected['flags'] += [
@@ -66,7 +69,7 @@ class MysqlTest extends TestCase
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         ];
         $connection = $this->getMockBuilder('StdClass')
-            ->setMethods(['exec'])
+            ->addMethods(['exec'])
             ->getMock();
 
         $driver->expects($this->once())->method('_connect')
@@ -79,7 +82,7 @@ class MysqlTest extends TestCase
     }
 
     /**
-     * Test connecting to Mysql with custom configuration
+     * Test connecting to MySQL with custom configuration
      *
      * @return void
      */
@@ -92,42 +95,52 @@ class MysqlTest extends TestCase
             'username' => 'user',
             'password' => 'pass',
             'port' => 3440,
-            'flags' => [1 => true, 2 => false],
-            'encoding' => 'some-encoding',
+            'flags' => [PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES utf8'],
+            'encoding' => null,
             'timezone' => 'Antarctica',
             'init' => [
                 'Execute this',
                 'this too',
-            ]
+            ],
         ];
         $driver = $this->getMockBuilder('Cake\Database\Driver\Mysql')
-            ->setMethods(['_connect', 'getConnection'])
+            ->onlyMethods(['_connect', 'getConnection'])
             ->setConstructorArgs([$config])
             ->getMock();
-        $dsn = 'mysql:host=foo;port=3440;dbname=bar;charset=some-encoding';
+        $dsn = 'mysql:host=foo;port=3440;dbname=bar';
         $expected = $config;
         $expected['init'][] = "SET time_zone = 'Antarctica'";
-        $expected['init'][] = 'SET NAMES some-encoding';
         $expected['flags'] += [
+            PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES utf8',
             PDO::ATTR_PERSISTENT => false,
             PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true,
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         ];
 
         $connection = $this->getMockBuilder('StdClass')
-            ->setMethods(['exec'])
+            ->addMethods(['exec'])
             ->getMock();
-        $connection->expects($this->at(0))->method('exec')->with('Execute this');
-        $connection->expects($this->at(1))->method('exec')->with('this too');
-        $connection->expects($this->at(2))->method('exec')->with("SET time_zone = 'Antarctica'");
-        $connection->expects($this->at(3))->method('exec')->with('SET NAMES some-encoding');
-        $connection->expects($this->exactly(4))->method('exec');
+        $connection->expects($this->exactly(3))
+            ->method('exec')
+            ->withConsecutive(['Execute this'], ['this too'], ["SET time_zone = 'Antarctica'"]);
 
         $driver->expects($this->once())->method('_connect')
             ->with($dsn, $expected);
         $driver->expects($this->any())->method('getConnection')
             ->will($this->returnValue($connection));
         $driver->connect($config);
+    }
+
+    /**
+     * Test schema
+     *
+     * @return void
+     */
+    public function testSchema()
+    {
+        $connection = ConnectionManager::get('test');
+        $config = ConnectionManager::getConfig('test');
+        $this->assertEquals($config['database'], $connection->getDriver()->schema());
     }
 
     /**
@@ -162,5 +175,44 @@ class MysqlTest extends TestCase
 
         $this->assertFalse($driver->commitTransaction());
         $this->assertTrue($driver->isConnected());
+    }
+
+    /**
+     * @dataProvider versionStringProvider
+     * @param string $dbVersion
+     * @param string $expectedVersion
+     * @return void
+     */
+    public function testVersion($dbVersion, $expectedVersion)
+    {
+        /** @var \PHPUnit\Framework\MockObject\MockObject&\Cake\Database\Connection $connection */
+        $connection = $this->getMockBuilder(Connection::class)
+            ->disableOriginalConstructor()
+            ->addMethods(['getAttribute'])
+            ->getMock();
+        $connection->expects($this->once())
+            ->method('getAttribute')
+            ->with(PDO::ATTR_SERVER_VERSION)
+            ->will($this->returnValue($dbVersion));
+
+        /** @var \PHPUnit\Framework\MockObject\MockObject&\Cake\Database\Driver\Mysql $driver */
+        $driver = $this->getMockBuilder(Mysql::class)
+            ->onlyMethods(['connect'])
+            ->getMock();
+
+        $driver->setConnection($connection);
+
+        $result = $driver->version();
+        $this->assertSame($expectedVersion, $result);
+    }
+
+    public function versionStringProvider()
+    {
+        return [
+            ['10.2.23-MariaDB', '10.2.23-MariaDB'],
+            ['5.5.5-10.2.23-MariaDB', '10.2.23-MariaDB'],
+            ['5.5.5-10.4.13-MariaDB-1:10.4.13+maria~focal', '10.4.13-MariaDB-1'],
+            ['8.0.0', '8.0.0'],
+        ];
     }
 }

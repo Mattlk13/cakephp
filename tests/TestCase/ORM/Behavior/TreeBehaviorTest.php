@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -22,29 +24,30 @@ use Cake\TestSuite\TestCase;
  */
 class TreeBehaviorTest extends TestCase
 {
-
     /**
      * fixtures
      *
      * @var array
      */
-    public $fixtures = [
+    protected $fixtures = [
         'core.MenuLinkTrees',
-        'core.NumberTrees'
+        'core.NumberTrees',
     ];
 
-    public function setUp()
+    /**
+     * @var \Cake\ORM\Table|\Cake\ORM\Behavior\TreeBehavior
+     */
+    protected $table;
+
+    /**
+     * @return void
+     */
+    public function setUp(): void
     {
         parent::setUp();
         $this->table = $this->getTableLocator()->get('NumberTrees');
         $this->table->setPrimaryKey(['id']);
         $this->table->addBehavior('Tree');
-    }
-
-    public function tearDown()
-    {
-        parent::tearDown();
-        $this->getTableLocator()->clear();
     }
 
     /**
@@ -68,7 +71,7 @@ class TreeBehaviorTest extends TestCase
             '___12:13 -  8:flash',
             '__15:16 -  9:cd',
             '__17:18 - 10:radios',
-            '21:22 - 11:alien hardware'
+            '21:22 - 11:alien hardware',
         ];
         $this->assertMpttValues($expected, $this->table);
 
@@ -83,7 +86,7 @@ class TreeBehaviorTest extends TestCase
             '___ 6: 7 -  5:Link 5',
             '11:14 -  6:Link 6',
             '_12:13 -  7:Link 7',
-            '15:16 -  8:Link 8'
+            '15:16 -  8:Link 8',
         ];
         $this->assertMpttValues($expected, $table);
 
@@ -99,7 +102,7 @@ class TreeBehaviorTest extends TestCase
             '_12:15 - 15:mp3',
             '__13:14 - 16:flash',
             '_16:17 - 17:cd',
-            '_18:19 - 18:radios'
+            '_18:19 - 18:radios',
         ];
         $this->assertMpttValues($expected, $table);
     }
@@ -151,29 +154,29 @@ class TreeBehaviorTest extends TestCase
         // direct children for the root node
         $table = $this->table;
         $countDirect = $this->table->childCount($table->get(1), true);
-        $this->assertEquals(2, $countDirect);
+        $this->assertSame(2, $countDirect);
 
         // counts all the children of root
         $count = $this->table->childCount($table->get(1), false);
-        $this->assertEquals(9, $count);
+        $this->assertSame(9, $count);
 
         // counts direct children
         $count = $this->table->childCount($table->get(2), false);
-        $this->assertEquals(3, $count);
+        $this->assertSame(3, $count);
 
         // count children for a middle-node
         $count = $this->table->childCount($table->get(6), false);
-        $this->assertEquals(4, $count);
+        $this->assertSame(4, $count);
 
         // count leaf children
         $count = $this->table->childCount($table->get(10), false);
-        $this->assertEquals(0, $count);
+        $this->assertSame(0, $count);
 
         // test scoping
         $table = $this->getTableLocator()->get('MenuLinkTrees');
         $table->addBehavior('Tree', ['scope' => ['menu' => 'main-menu']]);
         $count = $table->childCount($table->get(3), false);
-        $this->assertEquals(2, $count);
+        $this->assertSame(2, $count);
     }
 
     /**
@@ -185,10 +188,10 @@ class TreeBehaviorTest extends TestCase
     {
         $table = $this->table;
         $node = $table->get(6);
-        $node->unsetProperty('lft');
-        $node->unsetProperty('rght');
+        $node->unset('lft');
+        $node->unset('rght');
         $count = $this->table->childCount($node, false);
-        $this->assertEquals(4, $count);
+        $this->assertSame(4, $count);
     }
 
     /**
@@ -202,11 +205,12 @@ class TreeBehaviorTest extends TestCase
         $table->addBehavior('Tree', [
             'scope' => function ($query) {
                 return $query->where(['menu' => 'main-menu']);
-            }
+            },
         ]);
         $count = $table->childCount($table->get(1), false);
-        $this->assertEquals(4, $count);
+        $this->assertSame(4, $count);
     }
+
     /**
      * Tests the find('children') method
      *
@@ -275,7 +279,7 @@ class TreeBehaviorTest extends TestCase
         $query->clause('order')->iterateParts(function ($dir, $field) use (&$result) {
             $result = $field;
         });
-        $this->assertEquals('MenuLinkTrees.lft', $result);
+        $this->assertSame('MenuLinkTrees.lft', $result);
 
         $result = $query->toArray();
         $expected = [
@@ -286,7 +290,7 @@ class TreeBehaviorTest extends TestCase
             5 => '___Link 5',
             6 => 'Link 6',
             7 => '_Link 7',
-            8 => 'Link 8'
+            8 => 'Link 8',
         ];
         $this->assertEquals($expected, $result);
     }
@@ -311,7 +315,7 @@ class TreeBehaviorTest extends TestCase
             '_ 8: 9 -  2:Link 2',
             '11:14 -  6:Link 6',
             '_12:13 -  7:Link 7',
-            '15:16 -  8:Link 8'
+            '15:16 -  8:Link 8',
         ];
         $this->assertMpttValues($expected, $table);
 
@@ -325,7 +329,7 @@ class TreeBehaviorTest extends TestCase
             '_ 8: 9 -  2:Link 2',
             '11:12 -  8:Link 8',
             '13:16 -  6:Link 6',
-            '_14:15 -  7:Link 7'
+            '_14:15 -  7:Link 7',
         ];
         $this->assertMpttValues($expected, $table);
     }
@@ -350,7 +354,7 @@ class TreeBehaviorTest extends TestCase
             '/what/the.html' => '   5',
             '/yeah/another-link.html' => '6',
             'https://cakephp.org' => ' 7',
-            '/page/who-we-are.html' => '8'
+            '/page/who-we-are.html' => '8',
         ];
         $this->assertEquals($expected, $result);
     }
@@ -380,7 +384,7 @@ class TreeBehaviorTest extends TestCase
             '/what/the.html' => '   5',
             '/yeah/another-link.html' => '6',
             'https://cakephp.org' => ' 7',
-            '/page/who-we-are.html' => '8'
+            '/page/who-we-are.html' => '8',
         ];
         $this->assertEquals($expected, $result);
     }
@@ -406,7 +410,7 @@ class TreeBehaviorTest extends TestCase
             '___ 6: 7 -  5:Link 5',
             '11:14 -  6:Link 6',
             '_12:13 -  7:Link 7',
-            '15:16 -  8:Link 8'
+            '15:16 -  8:Link 8',
         ];
         $this->assertMpttValues($expected, $table);
 
@@ -421,7 +425,7 @@ class TreeBehaviorTest extends TestCase
             '___ 6: 7 -  5:Link 5',
             '11:14 -  6:Link 6',
             '_12:13 -  7:Link 7',
-            '15:16 -  8:Link 8'
+            '15:16 -  8:Link 8',
         ];
         $this->assertMpttValues($expected, $table);
 
@@ -437,7 +441,7 @@ class TreeBehaviorTest extends TestCase
             '_ 8: 9 -  2:Link 2',
             '11:14 -  6:Link 6',
             '_12:13 -  7:Link 7',
-            '15:16 -  8:Link 8'
+            '15:16 -  8:Link 8',
         ];
         $this->assertMpttValues($expected, $table);
     }
@@ -461,7 +465,7 @@ class TreeBehaviorTest extends TestCase
             '___ 6: 7 -  5:Link 5',
             '11:14 -  6:Link 6',
             '_12:13 -  7:Link 7',
-            '15:16 -  8:Link 8'
+            '15:16 -  8:Link 8',
         ];
         $this->assertMpttValues($expected, $table);
     }
@@ -484,7 +488,7 @@ class TreeBehaviorTest extends TestCase
             '__ 7:10 -  4:Link 4',
             '___ 8: 9 -  5:Link 5',
             '13:16 -  6:Link 6',
-            '_14:15 -  7:Link 7'
+            '_14:15 -  7:Link 7',
         ];
         $this->assertMpttValues($expected, $table);
     }
@@ -499,8 +503,8 @@ class TreeBehaviorTest extends TestCase
         $table = $this->getTableLocator()->get('MenuLinkTrees');
         $table->addBehavior('Tree', ['scope' => ['menu' => 'main-menu']]);
         $node = $table->get(8);
-        $node->unsetProperty('lft');
-        $node->unsetProperty('rght');
+        $node->unset('lft');
+        $node->unset('rght');
         $node = $table->moveUp($node, true);
         $this->assertEquals(['lft' => 1, 'rght' => 2], $node->extract(['lft', 'rght']));
         $expected = [
@@ -511,7 +515,7 @@ class TreeBehaviorTest extends TestCase
             '__ 7:10 -  4:Link 4',
             '___ 8: 9 -  5:Link 5',
             '13:16 -  6:Link 6',
-            '_14:15 -  7:Link 7'
+            '_14:15 -  7:Link 7',
         ];
         $this->assertMpttValues($expected, $table);
     }
@@ -536,7 +540,7 @@ class TreeBehaviorTest extends TestCase
             '___ 6: 7 -  5:Link 5',
             '11:14 -  6:Link 6',
             '_12:13 -  7:Link 7',
-            '15:16 -  8:Link 8'
+            '15:16 -  8:Link 8',
         ];
         $this->assertMpttValues($expected, $table);
 
@@ -551,7 +555,7 @@ class TreeBehaviorTest extends TestCase
             '___ 6: 7 -  5:Link 5',
             '11:14 -  6:Link 6',
             '_12:13 -  7:Link 7',
-            '15:16 -  8:Link 8'
+            '15:16 -  8:Link 8',
         ];
         $this->assertMpttValues($expected, $table);
 
@@ -566,7 +570,7 @@ class TreeBehaviorTest extends TestCase
             '_ 8: 9 -  2:Link 2',
             '11:14 -  6:Link 6',
             '_12:13 -  7:Link 7',
-            '15:16 -  8:Link 8'
+            '15:16 -  8:Link 8',
         ];
         $this->assertMpttValues($expected, $table);
     }
@@ -590,7 +594,7 @@ class TreeBehaviorTest extends TestCase
             '___ 6: 7 -  5:Link 5',
             '11:14 -  6:Link 6',
             '_12:13 -  7:Link 7',
-            '15:16 -  8:Link 8'
+            '15:16 -  8:Link 8',
         ];
         $this->assertMpttValues($expected, $table);
     }
@@ -614,7 +618,7 @@ class TreeBehaviorTest extends TestCase
             '_ 8: 9 -  2:Link 2',
             '_10:15 -  3:Link 3',
             '__11:14 -  4:Link 4',
-            '___12:13 -  5:Link 5'
+            '___12:13 -  5:Link 5',
         ];
         $this->assertMpttValues($expected, $table);
     }
@@ -629,8 +633,8 @@ class TreeBehaviorTest extends TestCase
         $table = $this->getTableLocator()->get('MenuLinkTrees');
         $table->addBehavior('Tree', ['scope' => ['menu' => 'main-menu']]);
         $node = $table->get(1);
-        $node->unsetProperty('lft');
-        $node->unsetProperty('rght');
+        $node->unset('lft');
+        $node->unset('rght');
         $node = $table->moveDown($node, true);
         $this->assertEquals(['lft' => 7, 'rght' => 16], $node->extract(['lft', 'rght']));
         $expected = [
@@ -641,7 +645,7 @@ class TreeBehaviorTest extends TestCase
             '_ 8: 9 -  2:Link 2',
             '_10:15 -  3:Link 3',
             '__11:14 -  4:Link 4',
-            '___12:13 -  5:Link 5'
+            '___12:13 -  5:Link 5',
         ];
         $this->assertMpttValues($expected, $table);
     }
@@ -661,7 +665,7 @@ class TreeBehaviorTest extends TestCase
             '___12:13 -  8:flash',
             '__15:16 -  9:cd',
             '__17:18 - 10:radios',
-            '21:22 - 11:alien hardware'
+            '21:22 - 11:alien hardware',
         ];
         $this->assertMpttValues($expected, $this->table);
     }
@@ -694,7 +698,7 @@ class TreeBehaviorTest extends TestCase
             '___12:13 -  8:flash',
             '__15:16 -  9:cd',
             '__17:18 - 10:radios',
-            '21:22 - 11:alien hardware'
+            '21:22 - 11:alien hardware',
         ];
         $this->assertMpttValues($expected, $table);
 
@@ -725,7 +729,7 @@ class TreeBehaviorTest extends TestCase
             '___ 6: 7 -  5:Link 5',
             '11:14 -  6:Link 6',
             '_12:13 -  7:Link 7',
-            '15:16 -  8:Link 8'
+            '15:16 -  8:Link 8',
         ];
         $this->assertMpttValues($expected, $table);
 
@@ -741,7 +745,7 @@ class TreeBehaviorTest extends TestCase
             '_12:15 - 15:mp3',
             '__13:14 - 16:flash',
             '_16:17 - 17:cd',
-            '_18:19 - 18:radios'
+            '_18:19 - 18:radios',
         ];
         $this->assertMpttValues($expected, $table);
     }
@@ -766,7 +770,7 @@ class TreeBehaviorTest extends TestCase
             '_ 8:13 -  3:Link 3',
             '__ 9:12 -  4:Link 4',
             '___10:11 -  5:Link 5',
-            '_14:15 -  2:Link 2'
+            '_14:15 -  2:Link 2',
         ];
         $this->assertMpttValues($expected, $table);
     }
@@ -784,8 +788,8 @@ class TreeBehaviorTest extends TestCase
             ['markNew' => true]
         );
         $this->assertSame($entity, $table->save($entity));
-        $this->assertEquals(23, $entity->lft);
-        $this->assertEquals(24, $entity->rght);
+        $this->assertSame(23, $entity->lft);
+        $this->assertSame(24, $entity->rght);
 
         $expected = [
             ' 1:20 -  1:electronics',
@@ -817,8 +821,8 @@ class TreeBehaviorTest extends TestCase
             ['markNew' => true]
         );
         $this->assertSame($entity, $table->save($entity));
-        $this->assertEquals(20, $entity->lft);
-        $this->assertEquals(21, $entity->rght);
+        $this->assertSame(20, $entity->lft);
+        $this->assertSame(21, $entity->rght);
 
         $expected = [
             ' 1:22 -  1:electronics',
@@ -850,8 +854,8 @@ class TreeBehaviorTest extends TestCase
             ['markNew' => true]
         );
         $this->assertSame($entity, $table->save($entity));
-        $this->assertEquals(9, $entity->lft);
-        $this->assertEquals(10, $entity->rght);
+        $this->assertSame(9, $entity->lft);
+        $this->assertSame(10, $entity->rght);
 
         $expected = [
             ' 1:22 -  1:electronics',
@@ -865,7 +869,7 @@ class TreeBehaviorTest extends TestCase
             '___14:15 -  8:flash',
             '__17:18 -  9:cd',
             '__19:20 - 10:radios',
-            '23:24 - 11:alien hardware'
+            '23:24 - 11:alien hardware',
         ];
         $this->assertMpttValues($expected, $this->table);
     }
@@ -886,8 +890,8 @@ class TreeBehaviorTest extends TestCase
 
         $entity = new Entity(['name' => 'carpentry', 'parent_id' => null], ['markNew' => true]);
         $this->assertSame($entity, $table->save($entity));
-        $this->assertEquals(25, $entity->lft);
-        $this->assertEquals(26, $entity->rght);
+        $this->assertSame(25, $entity->lft);
+        $this->assertSame(26, $entity->rght);
 
         $expected = [
             ' 1:20 -  1:electronics',
@@ -947,8 +951,8 @@ class TreeBehaviorTest extends TestCase
         $entity = $table->get(2);
         $entity->parent_id = 6;
         $this->assertSame($entity, $table->save($entity));
-        $this->assertEquals(11, $entity->lft);
-        $this->assertEquals(18, $entity->rght);
+        $this->assertSame(11, $entity->lft);
+        $this->assertSame(18, $entity->rght);
 
         $expected = [
             ' 1:20 -  1:electronics',
@@ -961,7 +965,7 @@ class TreeBehaviorTest extends TestCase
             '___12:13 -  3:tube',
             '___14:15 -  4:lcd',
             '___16:17 -  5:plasma',
-            '21:22 - 11:alien hardware'
+            '21:22 - 11:alien hardware',
         ];
         $this->assertMpttValues($expected, $table);
     }
@@ -977,8 +981,8 @@ class TreeBehaviorTest extends TestCase
         $entity = $table->get(6);
         $entity->parent_id = 2;
         $this->assertSame($entity, $table->save($entity));
-        $this->assertEquals(9, $entity->lft);
-        $this->assertEquals(18, $entity->rght);
+        $this->assertSame(9, $entity->lft);
+        $this->assertSame(18, $entity->rght);
 
         $expected = [
             ' 1:20 -  1:electronics',
@@ -991,7 +995,7 @@ class TreeBehaviorTest extends TestCase
             '____11:12 -  8:flash',
             '___14:15 -  9:cd',
             '___16:17 - 10:radios',
-            '21:22 - 11:alien hardware'
+            '21:22 - 11:alien hardware',
         ];
         $this->assertMpttValues($expected, $this->table);
     }
@@ -1007,8 +1011,8 @@ class TreeBehaviorTest extends TestCase
         $entity = $table->get(10);
         $entity->parent_id = 2;
         $this->assertSame($entity, $table->save($entity));
-        $this->assertEquals(9, $entity->lft);
-        $this->assertEquals(10, $entity->rght);
+        $this->assertSame(9, $entity->lft);
+        $this->assertSame(10, $entity->rght);
 
         $expected = [
             ' 1:20 -  1:electronics',
@@ -1021,7 +1025,7 @@ class TreeBehaviorTest extends TestCase
             '__13:16 -  7:mp3',
             '___14:15 -  8:flash',
             '__17:18 -  9:cd',
-            '21:22 - 11:alien hardware'
+            '21:22 - 11:alien hardware',
         ];
         $this->assertMpttValues($expected, $this->table);
     }
@@ -1037,8 +1041,8 @@ class TreeBehaviorTest extends TestCase
         $entity = $table->get(5);
         $entity->parent_id = 6;
         $this->assertSame($entity, $table->save($entity));
-        $this->assertEquals(17, $entity->lft);
-        $this->assertEquals(18, $entity->rght);
+        $this->assertSame(17, $entity->lft);
+        $this->assertSame(18, $entity->rght);
 
         $result = $table->find()->order('lft')->enableHydration(false);
 
@@ -1053,7 +1057,7 @@ class TreeBehaviorTest extends TestCase
             '__13:14 -  9:cd',
             '__15:16 - 10:radios',
             '__17:18 -  5:plasma',
-            '21:22 - 11:alien hardware'
+            '21:22 - 11:alien hardware',
         ];
         $this->assertMpttValues($expected, $table);
     }
@@ -1067,12 +1071,12 @@ class TreeBehaviorTest extends TestCase
     {
         $table = $this->table;
         $entity = $table->get(6);
-        $entity->unsetProperty('lft');
-        $entity->unsetProperty('rght');
+        $entity->unset('lft');
+        $entity->unset('rght');
         $entity->parent_id = 2;
         $this->assertSame($entity, $table->save($entity));
-        $this->assertEquals(9, $entity->lft);
-        $this->assertEquals(18, $entity->rght);
+        $this->assertSame(9, $entity->lft);
+        $this->assertSame(18, $entity->rght);
 
         $expected = [
             ' 1:20 -  1:electronics',
@@ -1085,7 +1089,7 @@ class TreeBehaviorTest extends TestCase
             '____11:12 -  8:flash',
             '___14:15 -  9:cd',
             '___16:17 - 10:radios',
-            '21:22 - 11:alien hardware'
+            '21:22 - 11:alien hardware',
         ];
         $this->assertMpttValues($expected, $this->table);
     }
@@ -1101,8 +1105,8 @@ class TreeBehaviorTest extends TestCase
         $entity = $table->get(2);
         $entity->parent_id = null;
         $this->assertSame($entity, $table->save($entity));
-        $this->assertEquals(15, $entity->lft);
-        $this->assertEquals(22, $entity->rght);
+        $this->assertSame(15, $entity->lft);
+        $this->assertSame(22, $entity->rght);
 
         $expected = [
             ' 1:12 -  1:electronics',
@@ -1115,7 +1119,7 @@ class TreeBehaviorTest extends TestCase
             '15:22 -  2:televisions',
             '_16:17 -  3:tube',
             '_18:19 -  4:lcd',
-            '_20:21 -  5:plasma'
+            '_20:21 -  5:plasma',
         ];
         $this->assertMpttValues($expected, $table);
     }
@@ -1129,12 +1133,12 @@ class TreeBehaviorTest extends TestCase
     {
         $table = $this->table;
         $entity = $table->get(2);
-        $entity->unsetProperty('lft');
-        $entity->unsetProperty('rght');
+        $entity->unset('lft');
+        $entity->unset('rght');
         $entity->parent_id = null;
         $this->assertSame($entity, $table->save($entity));
-        $this->assertEquals(15, $entity->lft);
-        $this->assertEquals(22, $entity->rght);
+        $this->assertSame(15, $entity->lft);
+        $this->assertSame(22, $entity->rght);
 
         $expected = [
             ' 1:12 -  1:electronics',
@@ -1147,7 +1151,7 @@ class TreeBehaviorTest extends TestCase
             '15:22 -  2:televisions',
             '_16:17 -  3:tube',
             '_18:19 -  4:lcd',
-            '_20:21 -  5:plasma'
+            '_20:21 -  5:plasma',
         ];
         $this->assertMpttValues($expected, $table);
     }
@@ -1188,7 +1192,7 @@ class TreeBehaviorTest extends TestCase
             '___10:11 -  8:flash',
             '__13:14 -  9:cd',
             '__15:16 - 10:radios',
-            '19:20 - 11:alien hardware'
+            '19:20 - 11:alien hardware',
         ];
         $this->assertMpttValues($expected, $this->table);
     }
@@ -1210,7 +1214,7 @@ class TreeBehaviorTest extends TestCase
             '__ 3: 4 -  3:tube',
             '__ 5: 6 -  4:lcd',
             '__ 7: 8 -  5:plasma',
-            '11:12 - 11:alien hardware'
+            '11:12 - 11:alien hardware',
         ];
         $this->assertMpttValues($expected, $this->table);
     }
@@ -1264,7 +1268,7 @@ class TreeBehaviorTest extends TestCase
         $this->assertTrue($table->delete($entity));
 
         $expected = [
-            ' 1: 2 - 11:alien hardware'
+            ' 1: 2 - 11:alien hardware',
         ];
         $this->assertMpttValues($expected, $this->table);
     }
@@ -1278,12 +1282,12 @@ class TreeBehaviorTest extends TestCase
     {
         $table = $this->table;
         $entity = $table->get(1);
-        $entity->unsetProperty('lft');
-        $entity->unsetProperty('rght');
+        $entity->unset('lft');
+        $entity->unset('rght');
         $this->assertTrue($table->delete($entity));
 
         $expected = [
-            ' 1: 2 - 11:alien hardware'
+            ' 1: 2 - 11:alien hardware',
         ];
         $this->assertMpttValues($expected, $this->table);
     }
@@ -1298,8 +1302,8 @@ class TreeBehaviorTest extends TestCase
         $table = $this->table;
         $entity = $table->get(10);
         $this->assertSame($entity, $table->removeFromTree($entity));
-        $this->assertEquals(21, $entity->lft);
-        $this->assertEquals(22, $entity->rght);
+        $this->assertSame(21, $entity->lft);
+        $this->assertSame(22, $entity->rght);
         $this->assertNull($entity->parent_id);
         $result = $table->find()->order('lft')->enableHydration(false);
         $expected = [
@@ -1313,7 +1317,7 @@ class TreeBehaviorTest extends TestCase
             '___12:13 -  8:flash',
             '__15:16 -  9:cd',
             '19:20 - 11:alien hardware',
-            '21:22 - 10:radios'
+            '21:22 - 10:radios',
 
         ];
         $this->assertMpttValues($expected, $table);
@@ -1330,8 +1334,8 @@ class TreeBehaviorTest extends TestCase
         $entity = $table->get(6);
         $this->assertSame($entity, $table->removeFromTree($entity));
         $result = $table->find('threaded')->order('lft')->enableHydration(false)->toArray();
-        $this->assertEquals(21, $entity->lft);
-        $this->assertEquals(22, $entity->rght);
+        $this->assertSame(21, $entity->lft);
+        $this->assertSame(22, $entity->rght);
         $this->assertNull($entity->parent_id);
         $result = $table->find()->order('lft')->enableHydration(false);
         $expected = [
@@ -1345,7 +1349,7 @@ class TreeBehaviorTest extends TestCase
             '_14:15 -  9:cd',
             '_16:17 - 10:radios',
             '19:20 - 11:alien hardware',
-            '21:22 -  6:portable'
+            '21:22 -  6:portable',
         ];
         $this->assertMpttValues($expected, $table);
     }
@@ -1361,8 +1365,8 @@ class TreeBehaviorTest extends TestCase
         $entity = $table->get(1);
         $this->assertSame($entity, $table->removeFromTree($entity));
         $result = $table->find('threaded')->order('lft')->enableHydration(false)->toArray();
-        $this->assertEquals(21, $entity->lft);
-        $this->assertEquals(22, $entity->rght);
+        $this->assertSame(21, $entity->lft);
+        $this->assertSame(22, $entity->rght);
         $this->assertNull($entity->parent_id);
 
         $expected = [
@@ -1376,7 +1380,7 @@ class TreeBehaviorTest extends TestCase
             '_14:15 -  9:cd',
             '_16:17 - 10:radios',
             '19:20 - 11:alien hardware',
-            '21:22 -  1:electronics'
+            '21:22 -  1:electronics',
         ];
         $this->assertMpttValues($expected, $table);
     }
@@ -1390,11 +1394,11 @@ class TreeBehaviorTest extends TestCase
     public function testFindPathWithAssociation()
     {
         $table = $this->table;
-        $other = $this->getTableLocator()->get('FriendlyTrees', [
-            'table' => $table->getTable()
+        $this->getTableLocator()->get('FriendlyTrees', [
+            'table' => $table->getTable(),
         ]);
         $table->hasOne('FriendlyTrees', [
-            'foreignKey' => 'id'
+            'foreignKey' => 'id',
         ]);
         $result = $table
             ->find('children', ['for' => 1])
@@ -1412,13 +1416,13 @@ class TreeBehaviorTest extends TestCase
     {
         $entity = $this->table->get(8);
         $result = $this->table->getLevel($entity);
-        $this->assertEquals(3, $result);
+        $this->assertSame(3, $result);
 
         $result = $this->table->getLevel($entity->id);
-        $this->assertEquals(3, $result);
+        $this->assertSame(3, $result);
 
         $result = $this->table->getLevel(5);
-        $this->assertEquals(2, $result);
+        $this->assertSame(2, $result);
 
         $result = $this->table->getLevel(99999);
         $this->assertFalse($result);
@@ -1436,17 +1440,17 @@ class TreeBehaviorTest extends TestCase
         $entity = new Entity(['parent_id' => null, 'name' => 'Depth 0']);
         $this->table->save($entity);
         $entity = $this->table->get(12);
-        $this->assertEquals(0, $entity->depth);
+        $this->assertSame(0, $entity->depth);
 
         $entity = new Entity(['parent_id' => 1, 'name' => 'Depth 1']);
         $this->table->save($entity);
         $entity = $this->table->get(13);
-        $this->assertEquals(1, $entity->depth);
+        $this->assertSame(1, $entity->depth);
 
         $entity = new Entity(['parent_id' => 8, 'name' => 'Depth 4']);
         $this->table->save($entity);
         $entity = $this->table->get(14);
-        $this->assertEquals(4, $entity->depth);
+        $this->assertSame(4, $entity->depth);
     }
 
     /**
@@ -1460,30 +1464,30 @@ class TreeBehaviorTest extends TestCase
 
         // Leaf node
         $entity = $this->table->get(4);
-        $this->assertEquals(2, $entity->depth);
+        $this->assertSame(2, $entity->depth);
         $this->table->save($entity);
         $entity = $this->table->get(4);
-        $this->assertEquals(2, $entity->depth);
+        $this->assertSame(2, $entity->depth);
 
         // Non leaf node so depth of descendants will also change
         $entity = $this->table->get(6);
-        $this->assertEquals(1, $entity->depth);
+        $this->assertSame(1, $entity->depth);
 
         $entity->parent_id = null;
         $this->table->save($entity);
         $entity = $this->table->get(6);
-        $this->assertEquals(0, $entity->depth);
+        $this->assertSame(0, $entity->depth);
 
         $entity = $this->table->get(7);
-        $this->assertEquals(1, $entity->depth);
+        $this->assertSame(1, $entity->depth);
 
         $entity = $this->table->get(8);
-        $this->assertEquals(2, $entity->depth);
+        $this->assertSame(2, $entity->depth);
 
         $entity->parent_id = 6;
         $this->table->save($entity);
         $entity = $this->table->get(8);
-        $this->assertEquals(1, $entity->depth);
+        $this->assertSame(1, $entity->depth);
     }
 
     /**
@@ -1510,12 +1514,12 @@ class TreeBehaviorTest extends TestCase
             'valuePath' => function ($item, $key, $iterator) use ($primaryKey, $displayField) {
                 return sprintf(
                     '%s:%s - %s:%s',
-                    str_pad($item->lft, 2, ' ', STR_PAD_LEFT),
-                    str_pad($item->rght, 2, ' ', STR_PAD_LEFT),
-                    str_pad($item->$primaryKey, 2, ' ', STR_PAD_LEFT),
+                    str_pad((string)$item->lft, 2, ' ', STR_PAD_LEFT),
+                    str_pad((string)$item->rght, 2, ' ', STR_PAD_LEFT),
+                    str_pad((string)$item->$primaryKey, 2, ' ', STR_PAD_LEFT),
                     $item->{$displayField}
                 );
-            }
+            },
         ];
         $result = array_values($query->find('treeList', $options)->toArray());
 

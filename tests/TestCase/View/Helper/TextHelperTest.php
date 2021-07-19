@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -15,52 +17,35 @@
 namespace Cake\Test\TestCase\View\Helper;
 
 use Cake\Core\Configure;
-use Cake\Core\Plugin;
 use Cake\TestSuite\TestCase;
 use Cake\View\Helper\TextHelper;
 use Cake\View\View;
-
-/**
- * TextHelperTestObject
- */
-class TextHelperTestObject extends TextHelper
-{
-
-    public function attach(StringMock $string)
-    {
-        $this->_engine = $string;
-    }
-
-    public function engine()
-    {
-        return $this->_engine;
-    }
-}
-
-/**
- * StringMock class
- */
-class StringMock
-{
-}
+use TestApp\Utility\TestAppEngine;
+use TestApp\Utility\TextMock;
+use TestApp\View\Helper\TextHelperTestObject;
+use TestPlugin\Utility\TestPluginEngine;
 
 /**
  * TextHelperTest class
  */
 class TextHelperTest extends TestCase
 {
-
     /**
      * @var \Cake\View\Helper\TextHelper
      */
-    public $Text;
+    protected $Text;
+
+    /**
+     * @var \Cake\View\View
+     */
+    protected $View;
 
     /**
      * setUp method
      *
      * @return void
      */
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
         $this->View = new View();
@@ -75,7 +60,7 @@ class TextHelperTest extends TestCase
      *
      * @return void
      */
-    public function tearDown()
+    public function tearDown(): void
     {
         unset($this->Text, $this->View);
         static::setAppNamespace($this->_appNamespace);
@@ -90,41 +75,54 @@ class TextHelperTest extends TestCase
     public function testTextHelperProxyMethodCalls()
     {
         $methods = [
-            'stripLinks', 'excerpt', 'toList'
+            'stripLinks', 'toList',
         ];
-        $String = $this->getMockBuilder(__NAMESPACE__ . '\StringMock')
-            ->setMethods($methods)
+        $String = $this->getMockBuilder(TextMock::class)
+            ->addMethods($methods)
             ->getMock();
-        $Text = new TextHelperTestObject($this->View, ['engine' => __NAMESPACE__ . '\StringMock']);
+        $Text = new TextHelperTestObject($this->View, ['engine' => TextMock::class]);
         $Text->attach($String);
         foreach ($methods as $method) {
-            $String->expects($this->at(0))->method($method);
-            $Text->{$method}('who', 'what', 'when', 'where', 'how');
+            $String->expects($this->once())->method($method)->willReturn('');
+            $Text->{$method}(['who'], 'what', 'when', 'where', 'how');
         }
 
         $methods = [
-            'highlight', 'truncate'
+            'excerpt',
         ];
-        $String = $this->getMockBuilder(__NAMESPACE__ . '\StringMock')
-            ->setMethods($methods)
+        $String = $this->getMockBuilder(TextMock::class)
+            ->addMethods($methods)
             ->getMock();
-        $Text = new TextHelperTestObject($this->View, ['engine' => __NAMESPACE__ . '\StringMock']);
+        $Text = new TextHelperTestObject($this->View, ['engine' => TextMock::class]);
         $Text->attach($String);
         foreach ($methods as $method) {
-            $String->expects($this->at(0))->method($method);
-            $Text->{$method}('who', ['what']);
+            $String->expects($this->once())->method($method)->willReturn('');
+            $Text->{$method}('who', 'what');
         }
 
         $methods = [
-            'tail'
+            'highlight',
         ];
-        $String = $this->getMockBuilder(__NAMESPACE__ . '\StringMock')
-            ->setMethods($methods)
+        $String = $this->getMockBuilder(TextMock::class)
+            ->addMethods($methods)
             ->getMock();
-        $Text = new TextHelperTestObject($this->View, ['engine' => __NAMESPACE__ . '\StringMock']);
+        $Text = new TextHelperTestObject($this->View, ['engine' => TextMock::class]);
         $Text->attach($String);
         foreach ($methods as $method) {
-            $String->expects($this->at(0))->method($method);
+            $String->expects($this->once())->method($method)->willReturn('');
+            $Text->{$method}('who', 'what');
+        }
+
+        $methods = [
+            'tail', 'truncate',
+        ];
+        $String = $this->getMockBuilder(TextMock::class)
+            ->addMethods($methods)
+            ->getMock();
+        $Text = new TextHelperTestObject($this->View, ['engine' => TextMock::class]);
+        $Text->attach($String);
+        foreach ($methods as $method) {
+            $String->expects($this->once())->method($method)->willReturn('');
             $Text->{$method}('who', 1, ['what']);
         }
     }
@@ -137,11 +135,11 @@ class TextHelperTest extends TestCase
     public function testEngineOverride()
     {
         $Text = new TextHelperTestObject($this->View, ['engine' => 'TestAppEngine']);
-        $this->assertInstanceOf('TestApp\Utility\TestAppEngine', $Text->engine());
+        $this->assertInstanceOf(TestAppEngine::class, $Text->engine());
 
         $this->loadPlugins(['TestPlugin']);
         $Text = new TextHelperTestObject($this->View, ['engine' => 'TestPlugin.TestPluginEngine']);
-        $this->assertInstanceOf('TestPlugin\Utility\TestPluginEngine', $Text->engine());
+        $this->assertInstanceOf(TestPluginEngine::class, $Text->engine());
         $this->clearPlugins();
     }
 
@@ -154,62 +152,62 @@ class TextHelperTest extends TestCase
     {
         $text = 'The AWWWARD show happened today';
         $result = $this->Text->autoLink($text);
-        $this->assertEquals($text, $result);
+        $this->assertSame($text, $result);
 
         $text = 'This is a test text';
         $expected = 'This is a test text';
         $result = $this->Text->autoLink($text);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $text = 'Text with a partial www.cakephp.org URL and test@cakephp.org email address';
         $result = $this->Text->autoLink($text);
         $expected = 'Text with a partial <a href="http://www.cakephp.org">www.cakephp.org</a> URL and <a href="mailto:test@cakephp\.org">test@cakephp\.org</a> email address';
-        $this->assertRegExp('#^' . $expected . '$#', $result);
+        $this->assertMatchesRegularExpression('#^' . $expected . '$#', $result);
 
         $text = 'This is a test text with URL http://www.cakephp.org';
         $expected = 'This is a test text with URL <a href="http://www.cakephp.org">http://www.cakephp.org</a>';
         $result = $this->Text->autoLink($text);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $text = 'This is a test text with URL http://www.cakephp.org and some more text';
         $expected = 'This is a test text with URL <a href="http://www.cakephp.org">http://www.cakephp.org</a> and some more text';
         $result = $this->Text->autoLink($text);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $text = "This is a test text with URL http://www.cakephp.org\tand some more text";
         $expected = "This is a test text with URL <a href=\"http://www.cakephp.org\">http://www.cakephp.org</a>\tand some more text";
         $result = $this->Text->autoLink($text);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $text = 'This is a test text with URL http://www.cakephp.org(and some more text)';
         $expected = 'This is a test text with URL <a href="http://www.cakephp.org">http://www.cakephp.org</a>(and some more text)';
         $result = $this->Text->autoLink($text);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $text = 'This is a test text with URL (http://www.cakephp.org/page/4) in brackets';
         $expected = 'This is a test text with URL (<a href="http://www.cakephp.org/page/4">http://www.cakephp.org/page/4</a>) in brackets';
         $result = $this->Text->autoLink($text);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $text = 'This is a test text with URL [http://www.cakephp.org/page/4] in square brackets';
         $expected = 'This is a test text with URL [<a href="http://www.cakephp.org/page/4">http://www.cakephp.org/page/4</a>] in square brackets';
         $result = $this->Text->autoLink($text);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $text = 'This is a test text with URL [http://www.example.com?aParam[]=value1&aParam[]=value2&aParam[]=value3] in square brackets';
         $expected = 'This is a test text with URL [<a href="http://www.example.com?aParam[]=value1&amp;aParam[]=value2&amp;aParam[]=value3">http://www.example.com?aParam[]=value1&amp;aParam[]=value2&amp;aParam[]=value3</a>] in square brackets';
         $result = $this->Text->autoLink($text);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $text = 'This is a test text with URL ;http://www.cakephp.org/page/4; semi-colon';
         $expected = 'This is a test text with URL ;<a href="http://www.cakephp.org/page/4">http://www.cakephp.org/page/4</a>; semi-colon';
         $result = $this->Text->autoLink($text);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $text = 'This is a test text with URL (http://www.cakephp.org/page/4/other(thing)) brackets';
         $expected = 'This is a test text with URL (<a href="http://www.cakephp.org/page/4/other(thing)">http://www.cakephp.org/page/4/other(thing)</a>) brackets';
         $result = $this->Text->autoLink($text);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -223,7 +221,7 @@ class TextHelperTest extends TestCase
         $expected = 'Text with a url/email <a href="http://example.com/store?email=mark@example.com">' .
             'http://example.com/store?email=mark@example.com</a> and email.';
         $result = $this->Text->autoLink($text);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -236,12 +234,12 @@ class TextHelperTest extends TestCase
         $text = 'This is a test text with URL http://www.cakephp.org';
         $expected = 'This is a test text with URL <a href="http://www.cakephp.org" class="link">http://www.cakephp.org</a>';
         $result = $this->Text->autoLink($text, ['class' => 'link']);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $text = 'This is a test text with URL http://www.cakephp.org';
         $expected = 'This is a test text with URL <a href="http://www.cakephp.org" class="link" id="MyLink">http://www.cakephp.org</a>';
         $result = $this->Text->autoLink($text, ['class' => 'link', 'id' => 'MyLink']);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -254,12 +252,12 @@ class TextHelperTest extends TestCase
         $text = 'This is a <b>test</b> text with URL http://www.cakephp.org';
         $expected = 'This is a &lt;b&gt;test&lt;/b&gt; text with URL <a href="http://www.cakephp.org">http://www.cakephp.org</a>';
         $result = $this->Text->autoLink($text);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $text = 'This is a <b>test</b> text with URL http://www.cakephp.org';
         $expected = 'This is a <b>test</b> text with URL <a href="http://www.cakephp.org">http://www.cakephp.org</a>';
         $result = $this->Text->autoLink($text, ['escape' => false]);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $text = 'test <ul>
 		<li>lorem: http://example.org?some</li>
@@ -270,7 +268,7 @@ class TextHelperTest extends TestCase
 		<li>ipsum: <a href="http://othersite.com/abc">http://othersite.com/abc</a></li>
 		</ul> test';
         $result = $this->Text->autoLink($text, ['escape' => false]);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -343,48 +341,48 @@ class TextHelperTest extends TestCase
             ],
             [
                 'Text with a partial www.küchenschöhn-not-working.de URL',
-                'Text with a partial <a href="http://www.küchenschöhn-not-working.de">www.küchenschöhn-not-working.de</a> URL'
+                'Text with a partial <a href="http://www.küchenschöhn-not-working.de">www.küchenschöhn-not-working.de</a> URL',
             ],
             [
                 'Text with a partial http://www.küchenschöhn-not-working.de URL',
-                'Text with a partial <a href="http://www.küchenschöhn-not-working.de">http://www.küchenschöhn-not-working.de</a> URL'
+                'Text with a partial <a href="http://www.küchenschöhn-not-working.de">http://www.küchenschöhn-not-working.de</a> URL',
             ],
             [
                 "Text with partial www.cakephp.org\r\nwww.cakephp.org urls and CRLF",
-                "Text with partial <a href=\"http://www.cakephp.org\">www.cakephp.org</a>\r\n<a href=\"http://www.cakephp.org\">www.cakephp.org</a> urls and CRLF"
+                "Text with partial <a href=\"http://www.cakephp.org\">www.cakephp.org</a>\r\n<a href=\"http://www.cakephp.org\">www.cakephp.org</a> urls and CRLF",
             ],
             [
                 'https://nl.wikipedia.org/wiki/Exploit_(computerbeveiliging)',
-                '<a href="https://nl.wikipedia.org/wiki/Exploit_(computerbeveiliging)">https://nl.wikipedia.org/wiki/Exploit_(computerbeveiliging)</a>'
+                '<a href="https://nl.wikipedia.org/wiki/Exploit_(computerbeveiliging)">https://nl.wikipedia.org/wiki/Exploit_(computerbeveiliging)</a>',
             ],
             [
                 'http://dev.local/threads/search?search_string=this+is+a+test',
-                '<a href="http://dev.local/threads/search?search_string=this+is+a+test">http://dev.local/threads/search?search_string=this+is+a+test</a>'
+                '<a href="http://dev.local/threads/search?search_string=this+is+a+test">http://dev.local/threads/search?search_string=this+is+a+test</a>',
             ],
             [
                 'http://www.ad.nl/show/giel-beelen-heeft-weinig-moeite-met-rijontzegging~acd8b6ed',
-                '<a href="http://www.ad.nl/show/giel-beelen-heeft-weinig-moeite-met-rijontzegging~acd8b6ed">http://www.ad.nl/show/giel-beelen-heeft-weinig-moeite-met-rijontzegging~acd8b6ed</a>'
+                '<a href="http://www.ad.nl/show/giel-beelen-heeft-weinig-moeite-met-rijontzegging~acd8b6ed">http://www.ad.nl/show/giel-beelen-heeft-weinig-moeite-met-rijontzegging~acd8b6ed</a>',
             ],
             [
                 'https://sevvlor.com/page%20not%20found',
-                '<a href="https://sevvlor.com/page%20not%20found">https://sevvlor.com/page%20not%20found</a>'
+                '<a href="https://sevvlor.com/page%20not%20found">https://sevvlor.com/page%20not%20found</a>',
             ],
             [
                 'https://fakedomain.ext/path/#!topic/test',
-                '<a href="https://fakedomain.ext/path/#!topic/test">https://fakedomain.ext/path/#!topic/test</a>'
+                '<a href="https://fakedomain.ext/path/#!topic/test">https://fakedomain.ext/path/#!topic/test</a>',
             ],
             [
                 'https://fakedomain.ext/path/#!topic/test;other;tag',
-                '<a href="https://fakedomain.ext/path/#!topic/test;other;tag">https://fakedomain.ext/path/#!topic/test;other;tag</a>'
+                '<a href="https://fakedomain.ext/path/#!topic/test;other;tag">https://fakedomain.ext/path/#!topic/test;other;tag</a>',
             ],
             [
                 'This is text,https://fakedomain.ext/path/#!topic/test,tag, with a comma',
-                'This is text,<a href="https://fakedomain.ext/path/#!topic/test,tag">https://fakedomain.ext/path/#!topic/test,tag</a>, with a comma'
+                'This is text,<a href="https://fakedomain.ext/path/#!topic/test,tag">https://fakedomain.ext/path/#!topic/test,tag</a>, with a comma',
             ],
             [
                 'This is text https://fakedomain.ext/path/#!topic/path!',
-                'This is text <a href="https://fakedomain.ext/path/#!topic/path">https://fakedomain.ext/path/#!topic/path</a>!'
-            ]
+                'This is text <a href="https://fakedomain.ext/path/#!topic/path">https://fakedomain.ext/path/#!topic/path</a>!',
+            ],
         ];
     }
 
@@ -410,12 +408,12 @@ class TextHelperTest extends TestCase
         $text = 'Text with a partial www.cakephp.org URL';
         $expected = 'Text with a partial <a href="http://www.cakephp.org" \s*class="link">www.cakephp.org</a> URL';
         $result = $this->Text->autoLinkUrls($text, ['class' => 'link']);
-        $this->assertRegExp('#^' . $expected . '$#', $result);
+        $this->assertMatchesRegularExpression('#^' . $expected . '$#', $result);
 
         $text = 'Text with a partial WWW.cakephp.org &copy; URL';
         $expected = 'Text with a partial <a href="http://WWW.cakephp.org"\s*>WWW.cakephp.org</a> &copy; URL';
         $result = $this->Text->autoLinkUrls($text, ['escape' => false]);
-        $this->assertRegExp('#^' . $expected . '$#', $result);
+        $this->assertMatchesRegularExpression('#^' . $expected . '$#', $result);
     }
 
     /**
@@ -428,47 +426,47 @@ class TextHelperTest extends TestCase
         $text = 'Text with a partial <a href="http://www.example.com">http://www.example.com</a> link';
         $expected = 'Text with a partial <a href="http://www.example.com">http://www.example.com</a> link';
         $result = $this->Text->autoLinkUrls($text, ['escape' => false]);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $text = 'Text with a partial <a href="http://www.example.com">www.example.com</a> link';
         $expected = 'Text with a partial <a href="http://www.example.com">www.example.com</a> link';
         $result = $this->Text->autoLinkUrls($text, ['escape' => false]);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $text = 'Text with a partial <a href="http://www.cakephp.org">link</a> link';
         $expected = 'Text with a partial <a href="http://www.cakephp.org">link</a> link';
         $result = $this->Text->autoLinkUrls($text, ['escape' => false]);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $text = 'Text with a partial <iframe src="http://www.cakephp.org" /> link';
         $expected = 'Text with a partial <iframe src="http://www.cakephp.org" /> link';
         $result = $this->Text->autoLinkUrls($text, ['escape' => false]);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $text = 'Text with a partial <iframe src="http://www.cakephp.org" /> link';
         $expected = 'Text with a partial &lt;iframe src=&quot;http://www.cakephp.org&quot; /&gt; link';
         $result = $this->Text->autoLinkUrls($text, ['escape' => true]);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $text = 'Text with a url <a href="http://www.not-working-www.com">www.not-working-www.com</a> and more';
         $expected = 'Text with a url &lt;a href=&quot;http://www.not-working-www.com&quot;&gt;www.not-working-www.com&lt;/a&gt; and more';
         $result = $this->Text->autoLinkUrls($text, ['escape' => true]);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $text = 'Text with a url www.not-working-www.com and more';
         $expected = 'Text with a url <a href="http://www.not-working-www.com">www.not-working-www.com</a> and more';
         $result = $this->Text->autoLinkUrls($text, ['escape' => false]);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $text = 'Text with a url http://www.not-working-www.com and more';
         $expected = 'Text with a url <a href="http://www.not-working-www.com">http://www.not-working-www.com</a> and more';
         $result = $this->Text->autoLinkUrls($text, ['escape' => false]);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $text = 'Text with a url http://www.www.not-working-www.com and more';
         $expected = 'Text with a url <a href="http://www.www.not-working-www.com">http://www.www.not-working-www.com</a> and more';
         $result = $this->Text->autoLinkUrls($text, ['escape' => false]);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -481,7 +479,7 @@ class TextHelperTest extends TestCase
         $text = 'Text with a partial http://www.cakephp.org?product_id=123&foo=bar link';
         $expected = 'Text with a partial <a href="http://www.cakephp.org?product_id=123&amp;foo=bar">http://www.cakephp.org?product_id=123&amp;foo=bar</a> link';
         $result = $this->Text->autoLinkUrls($text);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -541,13 +539,13 @@ class TextHelperTest extends TestCase
             [
                 '<p>mark@example.com</p>',
                 '<p><a href="mailto:mark@example.com">mark@example.com</a></p>',
-                ['escape' => false]
+                ['escape' => false],
             ],
 
             [
                 'Some&nbsp;mark@example.com&nbsp;Text',
                 'Some&nbsp;<a href="mailto:mark@example.com">mark@example.com</a>&nbsp;Text',
-                ['escape' => false]
+                ['escape' => false],
             ],
         ];
     }
@@ -563,7 +561,7 @@ class TextHelperTest extends TestCase
     public function testAutoLinkEmails($text, $expected, $attrs = [])
     {
         $result = $this->Text->autoLinkEmails($text, $attrs);
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -575,7 +573,7 @@ class TextHelperTest extends TestCase
     {
         $result = $this->Text->autoLinkEmails('this is a myaddress@gmx-de test');
         $expected = 'this is a myaddress@gmx-de test';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -631,5 +629,41 @@ TEXT;
 TEXT;
         $result = $this->Text->autoParagraph($text);
         $this->assertTextEquals($expected, $result);
+
+        $expected = '';
+        $result = $this->Text->autoParagraph(null);
+        $this->assertTextEquals($expected, $result);
+    }
+
+    /**
+     * testSlug method
+     *
+     * @param string $string String
+     * @param array $options Options
+     * @param String $expected Expected string
+     * @return void
+     * @dataProvider slugInputProvider
+     */
+    public function testSlug($string, $options, $expected)
+    {
+        $result = $this->Text->slug($string, $options);
+        $this->assertSame($expected, $result);
+    }
+
+    /**
+     * @return array
+     */
+    public function slugInputProvider(): array
+    {
+        return [
+            [
+                'Foo Bar: Not just for breakfast any-more', [],
+                'Foo-Bar-Not-just-for-breakfast-any-more',
+            ],
+            [
+                'Foo Bar: Not just for breakfast any-more', ['replacement' => false],
+                'FooBarNotjustforbreakfastanymore',
+            ],
+        ];
     }
 }

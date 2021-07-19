@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * DatabaseSessionTest file
  *
@@ -26,20 +28,24 @@ use Cake\TestSuite\TestCase;
  */
 class DatabaseSessionTest extends TestCase
 {
-
     /**
      * fixtures
      *
      * @var string
      */
-    public $fixtures = ['core.Sessions'];
+    protected $fixtures = ['core.Sessions'];
+
+    /**
+     * @var \Cake\Http\Session\DatabaseSession
+     */
+    protected $storage;
 
     /**
      * setUp
      *
      * @return void
      */
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
         static::setAppNamespace();
@@ -51,10 +57,9 @@ class DatabaseSessionTest extends TestCase
      *
      * @return void
      */
-    public function tearDown()
+    public function tearDown(): void
     {
         unset($this->storage);
-        $this->getTableLocator()->clear();
         parent::tearDown();
     }
 
@@ -70,9 +75,9 @@ class DatabaseSessionTest extends TestCase
 
         $session = $this->getTableLocator()->get('Sessions');
         $this->assertInstanceOf('Cake\ORM\Table', $session);
-        $this->assertEquals('Sessions', $session->getAlias());
+        $this->assertSame('Sessions', $session->getAlias());
         $this->assertEquals(ConnectionManager::get('test'), $session->getConnection());
-        $this->assertEquals('sessions', $session->getTable());
+        $this->assertSame('sessions', $session->getTable());
     }
 
     /**
@@ -122,7 +127,7 @@ class DatabaseSessionTest extends TestCase
 
         $result = $this->storage->read('foo');
         $expected = 'Some value';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->storage->read('made up value');
         $this->assertSame('', $result);
@@ -135,7 +140,7 @@ class DatabaseSessionTest extends TestCase
      */
     public function testDestroy()
     {
-        $this->storage->write('foo', 'Some value');
+        $this->assertTrue($this->storage->write('foo', 'Some value'));
 
         $this->assertTrue($this->storage->destroy('foo'), 'Destroy failed');
         $this->assertSame('', $this->storage->read('foo'), 'Value still present.');
@@ -171,6 +176,6 @@ class DatabaseSessionTest extends TestCase
         $entity->value = 'something';
         $result = $this->storage->write('key', serialize($entity));
         $data = $this->getTableLocator()->get('Sessions')->get('key')->data;
-        $this->assertEquals(serialize($entity), stream_get_contents($data));
+        $this->assertSame(serialize($entity), stream_get_contents($data));
     }
 }

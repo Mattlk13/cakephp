@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) :  Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -23,7 +25,6 @@ use Cake\Utility\Text;
  */
 class FileLog extends BaseLog
 {
-
     /**
      * Default config for this class
      *
@@ -39,6 +40,7 @@ class FileLog extends BaseLog
      *   If value is 0, old versions are removed rather then rotated.
      * - `mask` A mask is applied when log files are created. Left empty no chmod
      *   is made.
+     * - `dateFormat` PHP date() format.
      *
      * @var array
      */
@@ -51,12 +53,13 @@ class FileLog extends BaseLog
         'rotate' => 10,
         'size' => 10485760, // 10MB
         'mask' => null,
+        'dateFormat' => 'Y-m-d H:i:s',
     ];
 
     /**
      * Path to save log files on.
      *
-     * @var string|null
+     * @var string
      */
     protected $_path;
 
@@ -83,13 +86,8 @@ class FileLog extends BaseLog
     {
         parent::__construct($config);
 
-        if (!empty($this->_config['path'])) {
-            $this->_path = $this->_config['path'];
-        }
-        if ($this->_path !== null &&
-            Configure::read('debug') &&
-            !is_dir($this->_path)
-        ) {
+        $this->_path = $this->getConfig('path', sys_get_temp_dir() . DIRECTORY_SEPARATOR);
+        if (Configure::read('debug') && !is_dir($this->_path)) {
             mkdir($this->_path, 0775, true);
         }
 
@@ -112,16 +110,16 @@ class FileLog extends BaseLog
     /**
      * Implements writing to log files.
      *
-     * @param string $level The severity level of the message being written.
-     *    See Cake\Log\Log::$_levels for list of possible levels.
+     * @param mixed $level The severity level of the message being written.
      * @param string $message The message you want to log.
      * @param array $context Additional information about the logged message
-     * @return bool success of write.
+     * @return void
+     * @see Cake\Log\Log::$_levels
      */
-    public function log($level, $message, array $context = [])
+    public function log($level, $message, array $context = []): void
     {
         $message = $this->_format($message, $context);
-        $output = date('Y-m-d H:i:s') . ' ' . ucfirst($level) . ': ' . $message . "\n";
+        $output = $this->_getFormattedDate() . ' ' . ucfirst($level) . ': ' . $message . "\n";
         $filename = $this->_getFilename($level);
         if ($this->_size) {
             $this->_rotateFile($filename);
@@ -130,11 +128,13 @@ class FileLog extends BaseLog
         $pathname = $this->_path . $filename;
         $mask = $this->_config['mask'];
         if (!$mask) {
-            return file_put_contents($pathname, $output, FILE_APPEND);
+            file_put_contents($pathname, $output, FILE_APPEND);
+
+            return;
         }
 
-        $exists = file_exists($pathname);
-        $result = file_put_contents($pathname, $output, FILE_APPEND);
+        $exists = is_file($pathname);
+        file_put_contents($pathname, $output, FILE_APPEND);
         static $selfError = false;
 
         if (!$selfError && !$exists && !chmod($pathname, (int)$mask)) {
@@ -145,8 +145,6 @@ class FileLog extends BaseLog
             ), E_USER_WARNING);
             $selfError = false;
         }
-
-        return $result;
     }
 
     /**
@@ -155,7 +153,7 @@ class FileLog extends BaseLog
      * @param string $level The level of log.
      * @return string File name
      */
-    protected function _getFilename($level)
+    protected function _getFilename(string $level): string
     {
         $debugTypes = ['notice', 'info', 'debug'];
 
@@ -163,7 +161,7 @@ class FileLog extends BaseLog
             $filename = $this->_file;
         } elseif ($level === 'error' || $level === 'warning') {
             $filename = 'error.log';
-        } elseif (in_array($level, $debugTypes)) {
+        } elseif (in_array($level, $debugTypes, true)) {
             $filename = 'debug.log';
         } else {
             $filename = $level . '.log';
@@ -180,12 +178,13 @@ class FileLog extends BaseLog
      * @return bool|null True if rotated successfully or false in case of error.
      *   Null if file doesn't need to be rotated.
      */
-    protected function _rotateFile($filename)
+    protected function _rotateFile(string $filename): ?bool
     {
         $filePath = $this->_path . $filename;
         clearstatcache(true, $filePath);
 
-        if (!file_exists($filePath) ||
+        if (
+            !is_file($filePath) ||
             filesize($filePath) < $this->_size
         ) {
             return null;

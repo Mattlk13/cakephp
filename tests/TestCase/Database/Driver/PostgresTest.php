@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -23,7 +25,6 @@ use PDO;
  */
 class PostgresTest extends TestCase
 {
-
     /**
      * Test connecting to Postgres with default configuration
      *
@@ -32,7 +33,7 @@ class PostgresTest extends TestCase
     public function testConnectionConfigDefault()
     {
         $driver = $this->getMockBuilder('Cake\Database\Driver\Postgres')
-            ->setMethods(['_connect', 'getConnection'])
+            ->onlyMethods(['_connect', 'getConnection'])
             ->getMock();
         $dsn = 'pgsql:host=localhost;port=5432;dbname=cake';
         $expected = [
@@ -52,11 +53,11 @@ class PostgresTest extends TestCase
         $expected['flags'] += [
             PDO::ATTR_PERSISTENT => true,
             PDO::ATTR_EMULATE_PREPARES => false,
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         ];
 
         $connection = $this->getMockBuilder('stdClass')
-            ->setMethods(['exec', 'quote'])
+            ->addMethods(['exec', 'quote'])
             ->getMock();
         $connection->expects($this->any())
             ->method('quote')
@@ -66,9 +67,12 @@ class PostgresTest extends TestCase
                 $this->returnArgument(0)
             ));
 
-        $connection->expects($this->at(1))->method('exec')->with('SET NAMES utf8');
-        $connection->expects($this->at(3))->method('exec')->with('SET search_path TO public');
-        $connection->expects($this->exactly(2))->method('exec');
+        $connection->expects($this->exactly(2))
+            ->method('exec')
+            ->withConsecutive(
+                ['SET NAMES utf8'],
+                ['SET search_path TO public']
+            );
 
         $driver->expects($this->once())->method('_connect')
             ->with($dsn, $expected);
@@ -96,10 +100,10 @@ class PostgresTest extends TestCase
             'encoding' => 'a-language',
             'timezone' => 'Antarctica',
             'schema' => 'fooblic',
-            'init' => ['Execute this', 'this too']
+            'init' => ['Execute this', 'this too'],
         ];
         $driver = $this->getMockBuilder('Cake\Database\Driver\Postgres')
-            ->setMethods(['_connect', 'getConnection', 'setConnection'])
+            ->onlyMethods(['_connect', 'getConnection', 'setConnection'])
             ->setConstructorArgs([$config])
             ->getMock();
         $dsn = 'pgsql:host=foo;port=3440;dbname=bar';
@@ -108,11 +112,11 @@ class PostgresTest extends TestCase
         $expected['flags'] += [
             PDO::ATTR_PERSISTENT => false,
             PDO::ATTR_EMULATE_PREPARES => false,
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         ];
 
         $connection = $this->getMockBuilder('stdClass')
-            ->setMethods(['exec', 'quote'])
+            ->addMethods(['exec', 'quote'])
             ->getMock();
         $connection->expects($this->any())
             ->method('quote')
@@ -122,12 +126,15 @@ class PostgresTest extends TestCase
                 $this->returnArgument(0)
             ));
 
-        $connection->expects($this->at(1))->method('exec')->with('SET NAMES a-language');
-        $connection->expects($this->at(3))->method('exec')->with('SET search_path TO fooblic');
-        $connection->expects($this->at(5))->method('exec')->with('Execute this');
-        $connection->expects($this->at(6))->method('exec')->with('this too');
-        $connection->expects($this->at(7))->method('exec')->with('SET timezone = Antarctica');
-        $connection->expects($this->exactly(5))->method('exec');
+        $connection->expects($this->exactly(5))
+            ->method('exec')
+            ->withConsecutive(
+                ['SET NAMES a-language'],
+                ['SET search_path TO fooblic'],
+                ['Execute this'],
+                ['this too'],
+                ['SET timezone = Antarctica']
+            );
 
         $driver->setConnection($connection);
         $driver->expects($this->once())->method('_connect')
@@ -147,12 +154,12 @@ class PostgresTest extends TestCase
     public function testInsertReturning()
     {
         $driver = $this->getMockBuilder('Cake\Database\Driver\Postgres')
-            ->setMethods(['_connect', 'getConnection'])
+            ->onlyMethods(['_connect', 'getConnection'])
             ->setConstructorArgs([[]])
             ->getMock();
         $connection = $this
-            ->getMockBuilder('\Cake\Database\Connection')
-            ->setMethods(['connect'])
+            ->getMockBuilder('Cake\Database\Connection')
+            ->onlyMethods(['connect'])
             ->disableOriginalConstructor()
             ->getMock();
 
@@ -162,7 +169,7 @@ class PostgresTest extends TestCase
             ->values([1, 'foo']);
         $translator = $driver->queryTranslator('insert');
         $query = $translator($query);
-        $this->assertEquals('RETURNING *', $query->clause('epilog'));
+        $this->assertSame('RETURNING *', $query->clause('epilog'));
 
         $query = new Query($connection);
         $query->insert(['id', 'title'])
@@ -170,6 +177,74 @@ class PostgresTest extends TestCase
             ->values([1, 'foo'])
             ->epilog('FOO');
         $query = $translator($query);
-        $this->assertEquals('FOO', $query->clause('epilog'));
+        $this->assertSame('FOO', $query->clause('epilog'));
+    }
+
+    /**
+     * Test that having queries replace the aggregated alias field.
+     *
+     * @return void
+     */
+    public function testHavingReplacesAlias()
+    {
+        $driver = $this->getMockBuilder('Cake\Database\Driver\Postgres')
+            ->onlyMethods(['connect', 'getConnection', 'version'])
+            ->setConstructorArgs([[]])
+            ->getMock();
+
+        $connection = $this->getMockBuilder('\Cake\Database\Connection')
+            ->onlyMethods(['connect', 'getDriver', 'setDriver'])
+            ->setConstructorArgs([['log' => false]])
+            ->getMock();
+        $connection->expects($this->any())
+            ->method('getDriver')
+            ->will($this->returnValue($driver));
+
+        $query = new Query($connection);
+        $query
+            ->select([
+                'posts.author_id',
+                'post_count' => $query->func()->count('posts.id'),
+            ])
+            ->group(['posts.author_id'])
+            ->having([$query->newExpr()->gte('post_count', 2, 'integer')]);
+
+        $expected = 'SELECT posts.author_id, (COUNT(posts.id)) AS "post_count" ' .
+            'GROUP BY posts.author_id HAVING COUNT(posts.id) >= :c0';
+        $this->assertSame($expected, $query->sql());
+    }
+
+    /**
+     * Test that having queries replaces nothing if no alias is used.
+     *
+     * @return void
+     */
+    public function testHavingWhenNoAliasIsUsed()
+    {
+        $driver = $this->getMockBuilder('Cake\Database\Driver\Postgres')
+            ->onlyMethods(['connect', 'getConnection', 'version'])
+            ->setConstructorArgs([[]])
+            ->getMock();
+
+        $connection = $this->getMockBuilder('\Cake\Database\Connection')
+            ->onlyMethods(['connect', 'getDriver', 'setDriver'])
+            ->setConstructorArgs([['log' => false]])
+            ->getMock();
+        $connection->expects($this->any())
+            ->method('getDriver')
+            ->will($this->returnValue($driver));
+
+        $query = new Query($connection);
+        $query
+            ->select([
+                'posts.author_id',
+                'post_count' => $query->func()->count('posts.id'),
+            ])
+            ->group(['posts.author_id'])
+            ->having([$query->newExpr()->gte('posts.author_id', 2, 'integer')]);
+
+        $expected = 'SELECT posts.author_id, (COUNT(posts.id)) AS "post_count" ' .
+            'GROUP BY posts.author_id HAVING posts.author_id >= :c0';
+        $this->assertSame($expected, $query->sql());
     }
 }

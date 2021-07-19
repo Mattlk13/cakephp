@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -22,26 +24,14 @@ use Cake\TestSuite\TestCase;
  */
 class AssociationProxyTest extends TestCase
 {
-
     /**
      * Fixtures to be loaded
      *
      * @var array
      */
-    public $fixtures = [
-        'core.Articles', 'core.Authors', 'core.Comments'
+    protected $fixtures = [
+        'core.Articles', 'core.Authors', 'core.Comments',
     ];
-
-    /**
-     * Teardown
-     *
-     * @return void
-     */
-    public function tearDown()
-    {
-        parent::tearDown();
-        $this->getTableLocator()->clear();
-    }
 
     /**
      * Tests that it is possible to get associations as a property
@@ -101,7 +91,32 @@ class AssociationProxyTest extends TestCase
         $articles->hasMany('comments', ['conditions' => ['published' => 'Y']]);
         $articles->comments->updateAll(['comment' => 'changed'], ['article_id' => 1]);
         $changed = $comments->find()->where(['comment' => 'changed'])->count();
-        $this->assertEquals(3, $changed);
+        $this->assertSame(3, $changed);
+    }
+
+    /**
+     * Tests that the proxied updateAll uses the association finder
+     *
+     * @return void
+     */
+    public function testUpdateAllFromAssociationFinder()
+    {
+        $this->setAppNamespace('TestApp');
+
+        $articles = $this->getTableLocator()->get('articles');
+        $authors = $this->getTableLocator()->get('authors');
+        // Exclude a record from the published finder.
+        $articles->updateAll(['published' => 'N'], ['id' => 1]);
+
+        $authors->hasMany('Articles', [
+            'finder' => 'published',
+        ]);
+        $authors->Articles->updateAll(['published' => '?'], '1=1');
+        $missed = $articles->find()->where(['published' => 'Y'])->count();
+        $this->assertSame(0, $missed);
+
+        $remaining = $articles->find()->where(['published' => 'N'])->count();
+        $this->assertSame(1, $remaining);
     }
 
     /**
@@ -109,14 +124,37 @@ class AssociationProxyTest extends TestCase
      *
      * @return void
      */
-    public function testDeleteAllFromAssociation()
+    public function testDeleteAllFromAssociationConditions()
     {
         $articles = $this->getTableLocator()->get('articles');
         $comments = $this->getTableLocator()->get('comments');
         $articles->hasMany('comments', ['conditions' => ['published' => 'Y']]);
         $articles->comments->deleteAll(['article_id' => 1]);
         $remaining = $comments->find()->where(['article_id' => 1])->count();
-        $this->assertEquals(1, $remaining);
+        $this->assertSame(1, $remaining);
+    }
+
+    /**
+     * Tests that the proxied deleteAll uses the association finder
+     *
+     * @return void
+     */
+    public function testDeleteAllFromAssociationFinder()
+    {
+        $this->setAppNamespace('TestApp');
+
+        $articles = $this->getTableLocator()->get('articles');
+        $authors = $this->getTableLocator()->get('authors');
+        // Exclude a record from the published finder.
+        $articles->updateAll(['published' => 'N'], ['id' => 1]);
+
+        $authors->hasMany('Articles', [
+            'finder' => 'published',
+        ]);
+        $authors->Articles->deleteAll('1=1');
+        $remaining = $articles->find()->all();
+        $this->assertCount(1, $remaining);
+        $this->assertSame(['N'], $remaining->extract('published')->toList());
     }
 
     /**
@@ -143,15 +181,15 @@ class AssociationProxyTest extends TestCase
     {
         $articles = $this->getTableLocator()->get('articles');
         $mock = $this->getMockBuilder('Cake\ORM\Table')
-            ->setMethods(['crazy'])
+            ->addMethods(['crazy'])
             ->getMock();
         $articles->belongsTo('authors', [
-            'targetTable' => $mock
+            'targetTable' => $mock,
         ]);
 
         $mock->expects($this->once())->method('crazy')
             ->with('a', 'b')
             ->will($this->returnValue('thing'));
-        $this->assertEquals('thing', $articles->authors->crazy('a', 'b'));
+        $this->assertSame('thing', $articles->authors->crazy('a', 'b'));
     }
 }

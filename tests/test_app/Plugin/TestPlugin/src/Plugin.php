@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -15,6 +17,7 @@ namespace TestPlugin;
 
 use Cake\Core\BasePlugin;
 use Cake\Event\EventManagerInterface;
+use Cake\Http\MiddlewareQueue;
 
 class Plugin extends BasePlugin
 {
@@ -26,12 +29,12 @@ class Plugin extends BasePlugin
         return $events;
     }
 
-    public function middleware($middleware)
+    public function middleware(MiddlewareQueue $middlewareQueue): MiddlewareQueue
     {
-        $middleware->add(function ($req, $res, $next) {
+        $middlewareQueue->add(function ($req, $res, $next) {
             return $next($req, $res);
         });
 
-        return $middleware;
+        return $middlewareQueue;
     }
 }

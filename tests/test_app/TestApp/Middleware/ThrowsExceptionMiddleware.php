@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -23,6 +25,6 @@ class ThrowsExceptionMiddleware
 {
     public function __invoke($req, $res, $next)
     {
-        throw new ForbiddenException("Sample Message");
+        throw new ForbiddenException('Sample Message');
     }
 }

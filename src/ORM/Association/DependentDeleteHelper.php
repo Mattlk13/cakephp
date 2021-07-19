@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (http://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (http://cakefoundation.org)
@@ -24,7 +26,6 @@ use Cake\ORM\Association;
  */
 class DependentDeleteHelper
 {
-
     /**
      * Cascade a delete to remove dependent records.
      *
@@ -35,25 +36,30 @@ class DependentDeleteHelper
      * @param array $options The options for the original delete.
      * @return bool Success.
      */
-    public function cascadeDelete(Association $association, EntityInterface $entity, array $options = [])
+    public function cascadeDelete(Association $association, EntityInterface $entity, array $options = []): bool
     {
         if (!$association->getDependent()) {
             return true;
         }
         $table = $association->getTarget();
+        /** @psalm-suppress InvalidArgument */
         $foreignKey = array_map([$association, 'aliasField'], (array)$association->getForeignKey());
         $bindingKey = (array)$association->getBindingKey();
         $conditions = array_combine($foreignKey, $entity->extract($bindingKey));
 
         if ($association->getCascadeCallbacks()) {
             foreach ($association->find()->where($conditions)->all()->toList() as $related) {
-                $table->delete($related, $options);
+                $success = $table->delete($related, $options);
+                if (!$success) {
+                    return false;
+                }
             }
 
             return true;
         }
-        $conditions = array_merge($conditions, $association->getConditions());
 
-        return (bool)$table->deleteAll($conditions);
+        $association->deleteAll($conditions);
+
+        return true;
     }
 }

@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -16,37 +18,42 @@ namespace Cake\Test\TestCase\Http;
 
 use Cake\Core\BasePlugin;
 use Cake\Core\Configure;
-use Cake\Core\Plugin;
+use Cake\Core\Container;
+use Cake\Core\ContainerInterface;
 use Cake\Http\BaseApplication;
 use Cake\Http\MiddlewareQueue;
-use Cake\Http\Response;
 use Cake\Http\ServerRequestFactory;
 use Cake\Routing\RouteBuilder;
 use Cake\Routing\RouteCollection;
-use Cake\Routing\Router;
 use Cake\TestSuite\TestCase;
-use InvalidArgumentException;
 use Psr\Http\Message\ResponseInterface;
 use TestPlugin\Plugin as TestPlugin;
 
 /**
  * Base application test.
+ *
+ * @coversDefaultClass \Cake\Http\BaseApplication
  */
 class BaseApplicationTest extends TestCase
 {
+    /**
+     * @var string
+     */
+    protected $path;
+
     /**
      * Setup
      *
      * @return void
      */
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
         static::setAppNamespace();
         $this->path = dirname(dirname(__DIR__));
     }
 
-    public function tearDown()
+    public function tearDown(): void
     {
         parent::tearDown();
         $this->clearPlugins();
@@ -57,24 +64,20 @@ class BaseApplicationTest extends TestCase
      *
      * @return void
      */
-    public function testInvoke()
+    public function testHandle()
     {
-        $next = function ($req, $res) {
-            return $res;
-        };
-        $response = new Response();
         $request = ServerRequestFactory::fromGlobals(['REQUEST_URI' => '/cakes']);
         $request = $request->withAttribute('params', [
             'controller' => 'Cakes',
             'action' => 'index',
             'plugin' => null,
-            'pass' => []
+            'pass' => [],
         ]);
 
         $app = $this->getMockForAbstractClass(BaseApplication::class, [$this->path]);
-        $result = $app($request, $response, $next);
+        $result = $app->handle($request);
         $this->assertInstanceOf(ResponseInterface::class, $result);
-        $this->assertEquals('Hello Jane', '' . $result->getBody());
+        $this->assertSame('Hello Jane', '' . $result->getBody());
     }
 
     /**
@@ -88,29 +91,18 @@ class BaseApplicationTest extends TestCase
         $plugin = $app->getPlugins()->get('PluginJs');
         $this->assertInstanceOf(BasePlugin::class, $plugin);
 
-        $this->assertEquals(
+        $this->assertSame(
             TEST_APP . 'Plugin' . DS . 'PluginJs' . DS,
             $plugin->getPath()
         );
-        $this->assertEquals(
+        $this->assertSame(
             TEST_APP . 'Plugin' . DS . 'PluginJs' . DS . 'config' . DS,
             $plugin->getConfigPath()
         );
-        $this->assertEquals(
+        $this->assertSame(
             TEST_APP . 'Plugin' . DS . 'PluginJs' . DS . 'src' . DS,
             $plugin->getClassPath()
         );
-    }
-
-    /**
-     * Ensure that plugin interfaces are implemented.
-     */
-    public function testAddPluginBadClass()
-    {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('does not implement');
-        $app = $this->getMockForAbstractClass(BaseApplication::class, [$this->path]);
-        $app->addPlugin(__CLASS__);
     }
 
     public function testAddPluginValidShortName()
@@ -165,7 +157,7 @@ class BaseApplicationTest extends TestCase
             'plugin' => 'TestPlugin',
             'controller' => 'TestPlugin',
             'action' => 'index',
-            '_method' => 'GET'
+            '_method' => 'GET',
         ];
         $this->assertNotEmpty($collection->match($url, []));
     }
@@ -179,33 +171,8 @@ class BaseApplicationTest extends TestCase
         $app->addPlugin(TestPlugin::class);
 
         $this->assertFalse(Configure::check('PluginTest.test_plugin.bootstrap'));
-        $this->assertNull($app->pluginBootstrap());
+        $app->pluginBootstrap();
         $this->assertTrue(Configure::check('PluginTest.test_plugin.bootstrap'));
-    }
-
-    /**
-     * Ensure that plugins loaded via Plugin::load()
-     * don't have their bootstrapping run twice.
-     *
-     * @return void
-     */
-    public function testPluginBootstrapInteractWithPluginLoad()
-    {
-        $this->deprecated(function () {
-            Plugin::load('TestPlugin', ['bootstrap' => true]);
-            $app = $this->getMockForAbstractClass(
-                BaseApplication::class,
-                [$this->path]
-            );
-            $this->assertTrue(Configure::check('PluginTest.test_plugin.bootstrap'));
-            Configure::delete('PluginTest.test_plugin.bootstrap');
-
-            $this->assertNull($app->pluginBootstrap());
-            $this->assertFalse(
-                Configure::check('PluginTest.test_plugin.bootstrap'),
-                'Key should not be set, as plugin has already had bootstrap run'
-            );
-        });
     }
 
     /**
@@ -221,9 +188,7 @@ class BaseApplicationTest extends TestCase
             [$this->path]
         );
         $app->addPlugin('ParentPlugin');
-        $this->deprecated(function () use ($app) {
-            $app->pluginBootstrap();
-        });
+        $app->pluginBootstrap();
         $this->assertTrue(
             Configure::check('ParentPlugin.bootstrap'),
             'Plugin bootstrap should be run'
@@ -239,26 +204,72 @@ class BaseApplicationTest extends TestCase
     }
 
     /**
-     * Ensure that Router::$initialized is toggled even if the routes
-     * file fails. This prevents the routes file from being re-parsed
-     * during the error handling process.
+     * Tests that loading a nonexistent plugin through addOptionalPlugin() does not throw an exception
      *
      * @return void
+     * @covers ::addOptionalPlugin
      */
-    public function testRouteHookInitializesRouterOnError()
+    public function testAddOptionalPluginLoadingNonExistentPlugin()
     {
-        $app = $this->getMockForAbstractClass(
-            'Cake\Http\BaseApplication',
-            [TEST_APP . 'invalid_routes' . DS]
-        );
-        $builder = Router::createRouteBuilder('/');
-        try {
-            $app->routes($builder);
+        $app = $this->getMockForAbstractClass(BaseApplication::class, [$this->path]);
+        $pluginCountBefore = count($app->getPlugins());
+        $nonExistingPlugin = 'NonExistentPlugin';
+        $app->addOptionalPlugin($nonExistingPlugin);
+        $pluginCountAfter = count($app->getPlugins());
+        $this->assertSame($pluginCountBefore, $pluginCountAfter);
+    }
 
-            $this->fail('invalid_routes/routes.php file should raise an error.');
-        } catch (\InvalidArgumentException $e) {
-            $this->assertTrue(Router::$initialized, 'Should be toggled to prevent duplicate route errors');
-            $this->assertContains('route class', $e->getMessage());
-        }
+    /**
+     * Tests that loading an existing plugin through addOptionalPlugin() works
+     *
+     * @return void
+     * @covers ::addOptionalPlugin
+     */
+    public function testAddOptionalPluginLoadingNonExistentPluginValid()
+    {
+        $app = $this->getMockForAbstractClass(BaseApplication::class, [$this->path]);
+        $app->addOptionalPlugin(TestPlugin::class);
+
+        $this->assertCount(1, $app->getPlugins());
+        $this->assertTrue($app->getPlugins()->has('TestPlugin'));
+    }
+
+    public function testGetContainer()
+    {
+        $app = $this->getMockForAbstractClass(BaseApplication::class, [$this->path]);
+        $container = $app->getContainer();
+
+        $this->assertInstanceOf(ContainerInterface::class, $container);
+        $this->assertSame($container, $app->getContainer(), 'Should return a reference');
+    }
+
+    public function testBuildContainerEvent()
+    {
+        $app = $this->getMockForAbstractClass(BaseApplication::class, [$this->path]);
+        $called = false;
+        $app->getEventManager()->on('Application.buildContainer', function ($event, $container) use (&$called) {
+            $this->assertInstanceOf(BaseApplication::class, $event->getSubject());
+            $this->assertInstanceOf(ContainerInterface::class, $container);
+            $called = true;
+        });
+
+        $container = $app->getContainer();
+        $this->assertInstanceOf(ContainerInterface::class, $container);
+        $this->assertTrue($called, 'Listener should be called');
+    }
+
+    public function testBuildContainerEventReplaceContainer()
+    {
+        $app = $this->getMockForAbstractClass(BaseApplication::class, [$this->path]);
+        $app->getEventManager()->on('Application.buildContainer', function () {
+            $new = new Container();
+            $new->add('testing', 'yes');
+
+            return $new;
+        });
+
+        $container = $app->getContainer();
+        $this->assertInstanceOf(ContainerInterface::class, $container);
+        $this->assertTrue($container->has('testing'));
     }
 }

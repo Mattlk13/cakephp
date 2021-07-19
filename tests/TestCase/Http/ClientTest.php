@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -14,6 +16,7 @@
 namespace Cake\Test\TestCase\Http;
 
 use Cake\Http\Client;
+use Cake\Http\Client\Adapter\Stream;
 use Cake\Http\Client\Request;
 use Cake\Http\Client\Response;
 use Cake\Http\Cookie\Cookie;
@@ -26,7 +29,6 @@ use InvalidArgumentException;
  */
 class ClientTest extends TestCase
 {
-
     /**
      * Test storing config options and modifying them.
      *
@@ -37,6 +39,7 @@ class ClientTest extends TestCase
         $config = [
             'scheme' => 'http',
             'host' => 'example.org',
+            'basePath' => '/api/v1',
         ];
         $http = new Client($config);
         $result = $http->getConfig();
@@ -45,7 +48,7 @@ class ClientTest extends TestCase
         }
 
         $result = $http->setConfig([
-            'auth' => ['username' => 'mark', 'password' => 'secret']
+            'auth' => ['username' => 'mark', 'password' => 'secret'],
         ]);
         $this->assertSame($result, $http);
 
@@ -53,7 +56,8 @@ class ClientTest extends TestCase
         $expected = [
             'scheme' => 'http',
             'host' => 'example.org',
-            'auth' => ['username' => 'mark', 'password' => 'secret']
+            'auth' => ['username' => 'mark', 'password' => 'secret'],
+            'protocolVersion' => '1.1',
         ];
         foreach ($expected as $key => $val) {
             $this->assertEquals($val, $result[$key]);
@@ -86,14 +90,14 @@ class ClientTest extends TestCase
                 'http://example.com/test.html',
                 [],
                 null,
-                'Null options'
+                'Null options',
             ],
             [
                 'http://example.com/test.html',
                 'http://example.com/test.html',
                 [],
                 [],
-                'Simple string'
+                'Simple string',
             ],
             [
                 'http://example.com/test.html',
@@ -110,6 +114,27 @@ class ClientTest extends TestCase
                 'HTTPS',
             ],
             [
+                'https://example.com/api/v1/foo/test.html',
+                '/foo/test.html',
+                [],
+                ['host' => 'example.com', 'scheme' => 'https', 'basePath' => '/api/v1'],
+                'Base path included',
+            ],
+            [
+                'https://example.com/api/v1/foo/test.html',
+                '/foo/test.html',
+                [],
+                ['host' => 'example.com', 'scheme' => 'https', 'basePath' => '/api/v1/'],
+                'Base path with trailing forward slash',
+            ],
+            [
+                'https://example.com/api/v1/foo/test.html',
+                '/foo/test.html',
+                [],
+                ['host' => 'example.com', 'scheme' => 'https', 'basePath' => 'api/v1/'],
+                'Base path with no prepended forward slash',
+            ],
+            [
                 'http://example.com:8080/test.html',
                 '/test.html',
                 [],
@@ -121,35 +146,35 @@ class ClientTest extends TestCase
                 '/test.html',
                 [],
                 ['host' => 'example.com', 'port' => '80'],
-                'standard port, does not display'
+                'standard port, does not display',
             ],
             [
                 'https://example.com/test.html',
                 '/test.html',
                 [],
                 ['host' => 'example.com', 'scheme' => 'https', 'port' => '443'],
-                'standard port, does not display'
+                'standard port, does not display',
             ],
             [
                 'http://example.com/test.html',
                 'http://example.com/test.html',
                 [],
                 ['host' => 'example.com', 'scheme' => 'https'],
-                'options do not duplicate'
+                'options do not duplicate',
             ],
             [
                 'http://example.com/search?q=hi+there&cat%5Bid%5D%5B0%5D=2&cat%5Bid%5D%5B1%5D=3',
                 'http://example.com/search',
                 ['q' => 'hi there', 'cat' => ['id' => [2, 3]]],
                 [],
-                'query string data.'
+                'query string data.',
             ],
             [
                 'http://example.com/search?q=hi+there&id=12',
                 'http://example.com/search?q=hi+there',
                 ['id' => '12'],
                 [],
-                'query string data with some already on the url.'
+                'query string data with some already on the url.',
             ],
             [
                 'http://example.com/test.html',
@@ -158,7 +183,7 @@ class ClientTest extends TestCase
                 [
                     'scheme' => 'http',
                     'host' => 'example.com',
-                    'protocolRelative' => false
+                    'protocolRelative' => false,
                 ],
                 'url with a double slash',
             ],
@@ -168,7 +193,7 @@ class ClientTest extends TestCase
                 [],
                 [
                     'scheme' => 'http',
-                    'protocolRelative' => true
+                    'protocolRelative' => true,
                 ],
                 'protocol relative url',
             ],
@@ -182,7 +207,7 @@ class ClientTest extends TestCase
     {
         $http = new Client();
 
-        $result = $http->buildUrl($url, $query, $opts);
+        $result = $http->buildUrl($url, $query, (array)$opts);
         $this->assertEquals($expected, $result);
     }
 
@@ -201,27 +226,28 @@ class ClientTest extends TestCase
             'Content-Type' => 'application/x-www-form-urlencoded',
         ];
         $cookies = [
-            'split' => 'value'
+            'split' => 'value',
         ];
 
-        $mock = $this->getMockBuilder('Cake\Http\Client\Adapter\Stream')
-            ->setMethods(['send'])
+        $mock = $this->getMockBuilder(Stream::class)
+            ->onlyMethods(['send'])
             ->getMock();
         $mock->expects($this->once())
             ->method('send')
-            ->with($this->callback(function ($request) use ($cookies, $headers) {
+            ->with($this->callback(function ($request) use ($headers) {
                 $this->assertInstanceOf('Cake\Http\Client\Request', $request);
-                $this->assertEquals(Request::METHOD_GET, $request->getMethod());
-                $this->assertEquals('http://cakephp.org/test.html', $request->getUri() . '');
-                $this->assertEquals('split=value', $request->getHeaderLine('Cookie'));
-                $this->assertEquals($headers['Content-Type'], $request->getHeaderLine('content-type'));
-                $this->assertEquals($headers['Connection'], $request->getHeaderLine('connection'));
+                $this->assertSame(Request::METHOD_GET, $request->getMethod());
+                $this->assertSame('2', $request->getProtocolVersion());
+                $this->assertSame('http://cakephp.org/test.html', $request->getUri() . '');
+                $this->assertSame('split=value', $request->getHeaderLine('Cookie'));
+                $this->assertSame($headers['Content-Type'], $request->getHeaderLine('content-type'));
+                $this->assertSame($headers['Connection'], $request->getHeaderLine('connection'));
 
                 return true;
             }))
             ->will($this->returnValue([$response]));
 
-        $http = new Client(['adapter' => $mock]);
+        $http = new Client(['adapter' => $mock, 'protocolVersion' => '2']);
         $result = $http->get('http://cakephp.org/test.html', [], [
             'headers' => $headers,
             'cookies' => $cookies,
@@ -238,15 +264,15 @@ class ClientTest extends TestCase
     {
         $response = new Response();
 
-        $mock = $this->getMockBuilder('Cake\Http\Client\Adapter\Stream')
-            ->setMethods(['send'])
+        $mock = $this->getMockBuilder(Stream::class)
+            ->onlyMethods(['send'])
             ->getMock();
         $mock->expects($this->once())
             ->method('send')
             ->with($this->callback(function ($request) {
-                $this->assertEquals(Request::METHOD_GET, $request->getMethod());
+                $this->assertSame(Request::METHOD_GET, $request->getMethod());
                 $this->assertEmpty($request->getHeaderLine('Content-Type'), 'Should have no content-type set');
-                $this->assertEquals(
+                $this->assertSame(
                     'http://cakephp.org/search',
                     $request->getUri() . ''
                 );
@@ -257,7 +283,7 @@ class ClientTest extends TestCase
 
         $http = new Client([
             'host' => 'cakephp.org',
-            'adapter' => $mock
+            'adapter' => $mock,
         ]);
         $result = $http->get('/search');
         $this->assertSame($result, $response);
@@ -272,14 +298,14 @@ class ClientTest extends TestCase
     {
         $response = new Response();
 
-        $mock = $this->getMockBuilder('Cake\Http\Client\Adapter\Stream')
-            ->setMethods(['send'])
+        $mock = $this->getMockBuilder(Stream::class)
+            ->onlyMethods(['send'])
             ->getMock();
         $mock->expects($this->once())
             ->method('send')
             ->with($this->callback(function ($request) {
-                $this->assertEquals(Request::METHOD_GET, $request->getMethod());
-                $this->assertEquals(
+                $this->assertSame(Request::METHOD_GET, $request->getMethod());
+                $this->assertSame(
                     'http://cakephp.org/search?q=hi+there&Category%5Bid%5D%5B0%5D=2&Category%5Bid%5D%5B1%5D=3',
                     $request->getUri() . ''
                 );
@@ -290,11 +316,11 @@ class ClientTest extends TestCase
 
         $http = new Client([
             'host' => 'cakephp.org',
-            'adapter' => $mock
+            'adapter' => $mock,
         ]);
         $result = $http->get('/search', [
             'q' => 'hi there',
-            'Category' => ['id' => [2, 3]]
+            'Category' => ['id' => [2, 3]],
         ]);
         $this->assertSame($result, $response);
     }
@@ -308,13 +334,13 @@ class ClientTest extends TestCase
     {
         $response = new Response();
 
-        $mock = $this->getMockBuilder('Cake\Http\Client\Adapter\Stream')
-            ->setMethods(['send'])
+        $mock = $this->getMockBuilder(Stream::class)
+            ->onlyMethods(['send'])
             ->getMock();
         $mock->expects($this->once())
             ->method('send')
             ->with($this->callback(function ($request) {
-                $this->assertEquals(
+                $this->assertSame(
                     'http://cakephp.org/search?q=hi+there&Category%5Bid%5D%5B0%5D=2&Category%5Bid%5D%5B1%5D=3',
                     $request->getUri() . ''
                 );
@@ -325,11 +351,11 @@ class ClientTest extends TestCase
 
         $http = new Client([
             'host' => 'cakephp.org',
-            'adapter' => $mock
+            'adapter' => $mock,
         ]);
         $data = [
             'q' => 'hi there',
-            'Category' => ['id' => [2, 3]]
+            'Category' => ['id' => [2, 3]],
         ];
         $result = $http->get('/search', http_build_query($data));
         $this->assertSame($response, $result);
@@ -345,15 +371,15 @@ class ClientTest extends TestCase
     {
         $response = new Response();
 
-        $mock = $this->getMockBuilder('Cake\Http\Client\Adapter\Stream')
-            ->setMethods(['send'])
+        $mock = $this->getMockBuilder(Stream::class)
+            ->onlyMethods(['send'])
             ->getMock();
         $mock->expects($this->once())
             ->method('send')
             ->with($this->callback(function ($request) {
-                $this->assertEquals(Request::METHOD_GET, $request->getMethod());
-                $this->assertEquals('http://cakephp.org/search', '' . $request->getUri());
-                $this->assertEquals('some data', '' . $request->getBody());
+                $this->assertSame(Request::METHOD_GET, $request->getMethod());
+                $this->assertSame('http://cakephp.org/search', '' . $request->getUri());
+                $this->assertSame('some data', '' . $request->getBody());
 
                 return true;
             }))
@@ -361,10 +387,10 @@ class ClientTest extends TestCase
 
         $http = new Client([
             'host' => 'cakephp.org',
-            'adapter' => $mock
+            'adapter' => $mock,
         ]);
         $result = $http->get('/search', [
-            '_content' => 'some data'
+            '_content' => 'some data',
         ]);
         $this->assertSame($result, $response);
     }
@@ -376,19 +402,19 @@ class ClientTest extends TestCase
      */
     public function testInvalidAuthenticationType()
     {
-        $this->expectException(\Cake\Core\Exception\Exception::class);
-        $mock = $this->getMockBuilder('Cake\Http\Client\Adapter\Stream')
-            ->setMethods(['send'])
+        $this->expectException(\Cake\Core\Exception\CakeException::class);
+        $mock = $this->getMockBuilder(Stream::class)
+            ->onlyMethods(['send'])
             ->getMock();
         $mock->expects($this->never())
             ->method('send');
 
         $http = new Client([
             'host' => 'cakephp.org',
-            'adapter' => $mock
+            'adapter' => $mock,
         ]);
         $result = $http->get('/', [], [
-            'auth' => ['type' => 'horribly broken']
+            'auth' => ['type' => 'horribly broken'],
         ]);
     }
 
@@ -401,8 +427,8 @@ class ClientTest extends TestCase
     {
         $response = new Response();
 
-        $mock = $this->getMockBuilder('Cake\Http\Client\Adapter\Stream')
-            ->setMethods(['send'])
+        $mock = $this->getMockBuilder(Stream::class)
+            ->onlyMethods(['send'])
             ->getMock();
         $headers = [
             'Authorization' => 'Basic ' . base64_encode('mark:secret'),
@@ -411,10 +437,10 @@ class ClientTest extends TestCase
         $mock->expects($this->once())
             ->method('send')
             ->with($this->callback(function ($request) use ($headers) {
-                $this->assertEquals(Request::METHOD_GET, $request->getMethod());
-                $this->assertEquals('http://cakephp.org/', '' . $request->getUri());
-                $this->assertEquals($headers['Authorization'], $request->getHeaderLine('Authorization'));
-                $this->assertEquals($headers['Proxy-Authorization'], $request->getHeaderLine('Proxy-Authorization'));
+                $this->assertSame(Request::METHOD_GET, $request->getMethod());
+                $this->assertSame('http://cakephp.org/', '' . $request->getUri());
+                $this->assertSame($headers['Authorization'], $request->getHeaderLine('Authorization'));
+                $this->assertSame($headers['Proxy-Authorization'], $request->getHeaderLine('Proxy-Authorization'));
 
                 return true;
             }))
@@ -422,55 +448,13 @@ class ClientTest extends TestCase
 
         $http = new Client([
             'host' => 'cakephp.org',
-            'adapter' => $mock
+            'adapter' => $mock,
         ]);
         $result = $http->get('/', [], [
             'auth' => ['username' => 'mark', 'password' => 'secret'],
             'proxy' => ['username' => 'mark', 'password' => 'pass'],
         ]);
         $this->assertSame($result, $response);
-    }
-
-    /**
-     * Test authentication adapter that mutates request.
-     *
-     * @group deprecated
-     * @return void
-     */
-    public function testAuthenticationWithMutation()
-    {
-        $this->deprecated(function () {
-            static::setAppNamespace();
-            $response = new Response();
-            $mock = $this->getMockBuilder('Cake\Http\Client\Adapter\Stream')
-                ->setMethods(['send'])
-                ->getMock();
-            $headers = [
-                'Authorization' => 'Bearer abc123',
-                'Proxy-Authorization' => 'Bearer abc123',
-            ];
-            $mock->expects($this->once())
-                ->method('send')
-                ->with($this->callback(function ($request) use ($headers) {
-                    $this->assertEquals(Request::METHOD_GET, $request->getMethod());
-                    $this->assertEquals('http://cakephp.org/', '' . $request->getUri());
-                    $this->assertEquals($headers['Authorization'], $request->getHeaderLine('Authorization'));
-                    $this->assertEquals($headers['Proxy-Authorization'], $request->getHeaderLine('Proxy-Authorization'));
-
-                    return true;
-                }))
-                ->will($this->returnValue([$response]));
-
-            $http = new Client([
-                'host' => 'cakephp.org',
-                'adapter' => $mock
-            ]);
-            $result = $http->get('/', [], [
-                'auth' => ['type' => 'TestApp\Http\CompatAuth'],
-                'proxy' => ['type' => 'TestApp\Http\CompatAuth'],
-            ]);
-            $this->assertSame($result, $response);
-        });
     }
 
     /**
@@ -490,6 +474,7 @@ class ClientTest extends TestCase
             [Request::METHOD_TRACE],
         ];
     }
+
     /**
      * test simple POST request.
      *
@@ -500,15 +485,15 @@ class ClientTest extends TestCase
     {
         $response = new Response();
 
-        $mock = $this->getMockBuilder('Cake\Http\Client\Adapter\Stream')
-            ->setMethods(['send'])
+        $mock = $this->getMockBuilder(Stream::class)
+            ->onlyMethods(['send'])
             ->getMock();
         $mock->expects($this->once())
             ->method('send')
             ->with($this->callback(function ($request) use ($method) {
                 $this->assertInstanceOf('Cake\Http\Client\Request', $request);
                 $this->assertEquals($method, $request->getMethod());
-                $this->assertEquals('http://cakephp.org/projects/add', '' . $request->getUri());
+                $this->assertSame('http://cakephp.org/projects/add', '' . $request->getUri());
 
                 return true;
             }))
@@ -516,7 +501,7 @@ class ClientTest extends TestCase
 
         $http = new Client([
             'host' => 'cakephp.org',
-            'adapter' => $mock
+            'adapter' => $mock,
         ]);
         $result = $http->{$method}('/projects/add');
         $this->assertSame($result, $response);
@@ -552,13 +537,13 @@ class ClientTest extends TestCase
             'Accept' => $mime,
         ];
 
-        $mock = $this->getMockBuilder('Cake\Http\Client\Adapter\Stream')
-            ->setMethods(['send'])
+        $mock = $this->getMockBuilder(Stream::class)
+            ->onlyMethods(['send'])
             ->getMock();
         $mock->expects($this->once())
             ->method('send')
             ->with($this->callback(function ($request) use ($headers) {
-                $this->assertEquals(Request::METHOD_POST, $request->getMethod());
+                $this->assertSame(Request::METHOD_POST, $request->getMethod());
                 $this->assertEquals($headers['Content-Type'], $request->getHeaderLine('Content-Type'));
                 $this->assertEquals($headers['Accept'], $request->getHeaderLine('Accept'));
 
@@ -568,7 +553,7 @@ class ClientTest extends TestCase
 
         $http = new Client([
             'host' => 'cakephp.org',
-            'adapter' => $mock
+            'adapter' => $mock,
         ]);
         $http->post('/projects/add', $data, ['type' => $type]);
     }
@@ -583,14 +568,14 @@ class ClientTest extends TestCase
         $response = new Response();
         $data = 'some=value&more=data';
 
-        $mock = $this->getMockBuilder('Cake\Http\Client\Adapter\Stream')
-            ->setMethods(['send'])
+        $mock = $this->getMockBuilder(Stream::class)
+            ->onlyMethods(['send'])
             ->getMock();
         $mock->expects($this->any())
             ->method('send')
             ->with($this->callback(function ($request) use ($data) {
-                $this->assertEquals($data, '' . $request->getBody());
-                $this->assertEquals('application/x-www-form-urlencoded', $request->getHeaderLine('content-type'));
+                $this->assertSame($data, '' . $request->getBody());
+                $this->assertSame('application/x-www-form-urlencoded', $request->getHeaderLine('content-type'));
 
                 return true;
             }))
@@ -598,7 +583,7 @@ class ClientTest extends TestCase
 
         $http = new Client([
             'host' => 'cakephp.org',
-            'adapter' => $mock
+            'adapter' => $mock,
         ]);
         $http->post('/projects/add', $data);
         $http->put('/projects/add', $data);
@@ -612,16 +597,16 @@ class ClientTest extends TestCase
      */
     public function testExceptionOnUnknownType()
     {
-        $this->expectException(\Cake\Core\Exception\Exception::class);
-        $mock = $this->getMockBuilder('Cake\Http\Client\Adapter\Stream')
-            ->setMethods(['send'])
+        $this->expectException(\Cake\Core\Exception\CakeException::class);
+        $mock = $this->getMockBuilder(Stream::class)
+            ->onlyMethods(['send'])
             ->getMock();
         $mock->expects($this->never())
             ->method('send');
 
         $http = new Client([
             'host' => 'cakephp.org',
-            'adapter' => $mock
+            'adapter' => $mock,
         ]);
         $http->post('/projects/add', 'it works', ['type' => 'invalid']);
     }
@@ -633,17 +618,17 @@ class ClientTest extends TestCase
      */
     public function testCookieStorage()
     {
-        $adapter = $this->getMockBuilder('Cake\Http\Client\Adapter\Stream')
-            ->setMethods(['send'])
+        $adapter = $this->getMockBuilder(Stream::class)
+            ->onlyMethods(['send'])
             ->getMock();
 
         $headers = [
             'HTTP/1.0 200 Ok',
             'Set-Cookie: first=1',
-            'Set-Cookie: expiring=now; Expires=Wed, 09-Jun-1999 10:18:14 GMT'
+            'Set-Cookie: expiring=now; Expires=Wed, 09-Jun-1999 10:18:14 GMT',
         ];
         $response = new Response($headers, '');
-        $adapter->expects($this->at(0))
+        $adapter->expects($this->once())
             ->method('send')
             ->will($this->returnValue([$response]));
 
@@ -668,7 +653,7 @@ class ClientTest extends TestCase
     {
         $jar = new CookieCollection();
         $http = new Client([
-            'cookieJar' => $jar
+            'cookieJar' => $jar,
         ]);
 
         $this->assertSame($jar, $http->cookies());
@@ -735,15 +720,15 @@ class ClientTest extends TestCase
     {
         $response = new Response();
 
-        $mock = $this->getMockBuilder('Cake\Http\Client\Adapter\Stream')
-            ->setMethods(['send'])
+        $mock = $this->getMockBuilder(Stream::class)
+            ->onlyMethods(['send'])
             ->getMock();
         $mock->expects($this->once())
             ->method('send')
             ->with($this->callback(function ($request) {
                 $this->assertInstanceOf('Cake\Http\Client\Request', $request);
-                $this->assertEquals(Request::METHOD_HEAD, $request->getMethod());
-                $this->assertEquals('http://cakephp.org/search?q=hi+there', '' . $request->getUri());
+                $this->assertSame(Request::METHOD_HEAD, $request->getMethod());
+                $this->assertSame('http://cakephp.org/search?q=hi+there', '' . $request->getUri());
 
                 return true;
             }))
@@ -751,7 +736,7 @@ class ClientTest extends TestCase
 
         $http = new Client([
             'host' => 'cakephp.org',
-            'adapter' => $mock
+            'adapter' => $mock,
         ]);
         $result = $http->head('/search', [
             'q' => 'hi there',
@@ -769,7 +754,7 @@ class ClientTest extends TestCase
         $url = 'http://cakephp.org';
 
         $adapter = $this->getMockBuilder(Client\Adapter\Stream::class)
-            ->setMethods(['send'])
+            ->onlyMethods(['send'])
             ->getMock();
 
         $redirect = new Response([
@@ -777,64 +762,63 @@ class ClientTest extends TestCase
             'Location: http://cakephp.org/redirect1?foo=bar',
             'Set-Cookie: redirect1=true;path=/',
         ]);
-        $adapter->expects($this->at(0))
-            ->method('send')
-            ->with(
-                $this->callback(function ($request) use ($url) {
-                    $this->assertInstanceOf(Request::class, $request);
-                    $this->assertEquals($url, $request->getUri());
-
-                    return true;
-                }),
-                $this->callback(function ($options) {
-                    $this->assertArrayNotHasKey('redirect', $options);
-
-                    return true;
-                })
-            )
-            ->willReturn([$redirect]);
 
         $redirect2 = new Response([
             'HTTP/1.0 301',
             'Location: /redirect2#foo',
             'Set-Cookie: redirect2=true;path=/',
         ]);
-        $adapter->expects($this->at(1))
-            ->method('send')
-            ->with(
-                $this->callback(function ($request) use ($url) {
-                    $this->assertInstanceOf(Request::class, $request);
-                    $this->assertEquals($url . '/redirect1?foo=bar', $request->getUri());
-
-                    return true;
-                }),
-                $this->callback(function ($options) {
-                    $this->assertArrayNotHasKey('redirect', $options);
-
-                    return true;
-                })
-            )
-            ->willReturn([$redirect2]);
 
         $response = new Response([
-            'HTTP/1.0 200'
+            'HTTP/1.0 200',
         ]);
-        $adapter->expects($this->at(2))
-            ->method('send')
-            ->with($this->callback(function ($request) use ($url) {
-                $this->assertInstanceOf(Request::class, $request);
-                $this->assertEquals($url . '/redirect2#foo', $request->getUri());
 
-                return true;
-            }))
-            ->willReturn([$response]);
+        $adapter->expects($this->exactly(3))
+            ->method('send')
+            ->withConsecutive(
+                [
+                    $this->callback(function (Request $request) use ($url) {
+                        $this->assertInstanceOf(Request::class, $request);
+                        $this->assertSame($url, (string)$request->getUri());
+
+                        return true;
+                    }),
+                    $this->callback(function ($options) {
+                        $this->assertArrayNotHasKey('redirect', $options);
+
+                        return true;
+                    }),
+                ],
+                [
+                    $this->callback(function (Request $request) use ($url) {
+                        $this->assertInstanceOf(Request::class, $request);
+                        $this->assertSame($url . '/redirect1?foo=bar', (string)$request->getUri());
+
+                        return true;
+                    }),
+                    $this->callback(function ($options) {
+                        $this->assertArrayNotHasKey('redirect', $options);
+
+                        return true;
+                    }),
+                ],
+                [
+                    $this->callback(function (Request $request) use ($url) {
+                        $this->assertInstanceOf(Request::class, $request);
+                        $this->assertSame($url . '/redirect2#foo', (string)$request->getUri());
+
+                        return true;
+                    }),
+                ]
+            )
+            ->will($this->onConsecutiveCalls([$redirect], [$redirect2], [$response]));
 
         $client = new Client([
-            'adapter' => $adapter
+            'adapter' => $adapter,
         ]);
 
         $result = $client->send(new Request($url), [
-            'redirect' => 10
+            'redirect' => 10,
         ]);
 
         $this->assertInstanceOf(Response::class, $result);
@@ -843,5 +827,191 @@ class ClientTest extends TestCase
 
         $this->assertTrue($cookies->has('redirect1'));
         $this->assertTrue($cookies->has('redirect2'));
+    }
+
+    /**
+     * testSendRequest
+     *
+     * @return void
+     */
+    public function testSendRequest()
+    {
+        $response = new Response();
+
+        $headers = [
+            'User-Agent' => 'Cake',
+            'Connection' => 'close',
+            'Content-Type' => 'application/x-www-form-urlencoded',
+        ];
+
+        $mock = $this->getMockBuilder(Stream::class)
+            ->onlyMethods(['send'])
+            ->getMock();
+        $mock->expects($this->once())
+            ->method('send')
+            ->with($this->callback(function ($request) use ($headers) {
+                $this->assertInstanceOf('Laminas\Diactoros\Request', $request);
+                $this->assertSame(Request::METHOD_GET, $request->getMethod());
+                $this->assertSame('http://cakephp.org/test.html', $request->getUri() . '');
+                $this->assertSame($headers['Content-Type'], $request->getHeaderLine('content-type'));
+                $this->assertSame($headers['Connection'], $request->getHeaderLine('connection'));
+
+                return true;
+            }))
+            ->will($this->returnValue([$response]));
+
+        $http = new Client(['adapter' => $mock]);
+        $request = new \Laminas\Diactoros\Request(
+            'http://cakephp.org/test.html',
+            Request::METHOD_GET,
+            'php://temp',
+            $headers
+        );
+        $result = $http->sendRequest($request);
+
+        $this->assertSame($result, $response);
+    }
+
+    /**
+     * test redirect across sub domains
+     *
+     * @return void
+     */
+    public function testRedirectDifferentSubDomains()
+    {
+        $adapter = $this->getMockBuilder(Client\Adapter\Stream::class)
+            ->onlyMethods(['send'])
+            ->getMock();
+
+        $url = 'http://auth.example.org';
+
+        $redirect = new Response([
+            'HTTP/1.0 301',
+            'Location: http://backstage.example.org',
+        ]);
+        $response = new Response([
+            'HTTP/1.0 200',
+        ]);
+        $adapter->expects($this->exactly(2))
+            ->method('send')
+            ->withConsecutive(
+                [$this->anything()],
+                [
+                    $this->callback(function ($request) {
+                        $this->assertSame('http://backstage.example.org', (string)$request->getUri());
+                        $this->assertSame('session=backend', $request->getHeaderLine('Cookie'));
+
+                        return true;
+                    }),
+                ]
+            )
+            ->will($this->OnConsecutiveCalls([$redirect], [$response]));
+
+        $client = new Client([
+            'adapter' => $adapter,
+        ]);
+        $client->addCookie(new Cookie('session', 'backend', null, '/', 'backstage.example.org'));
+        $client->addCookie(new Cookie('session', 'authz', null, '/', 'auth.example.org'));
+
+        $result = $client->send(new Request($url), [
+            'redirect' => 10,
+        ]);
+
+        $this->assertInstanceOf(Response::class, $result);
+        $this->assertSame($response, $result);
+    }
+
+    /**
+     * Scheme is set when passed to client in string
+     */
+    public function testCreateFromUrlSetsScheme()
+    {
+        $client = Client::createFromUrl('https://example.co/');
+        $this->assertSame('https', $client->getConfig('scheme'));
+    }
+
+    /**
+     * Host is set when passed to client in string
+     */
+    public function testCreateFromUrlSetsHost()
+    {
+        $client = Client::createFromUrl('https://example.co/');
+        $this->assertSame('example.co', $client->getConfig('host'));
+    }
+
+    /**
+     * basePath is set when passed to client in string
+     */
+    public function testCreateFromUrlSetsBasePath()
+    {
+        $client = Client::createFromUrl('https://example.co/api/v1');
+        $this->assertSame('/api/v1', $client->getConfig('basePath'));
+    }
+
+    /**
+     * Test exception is thrown when URL cannot be parsed
+     */
+    public function testCreateFromUrlThrowsInvalidExceptionWhenUrlCannotBeParsed()
+    {
+        $this->expectException(InvalidArgumentException::class);
+        Client::createFromUrl('htps://');
+        $message = $this->getExpectedExceptionMessage();
+        $this->assertTextContains('did not parse', $message);
+    }
+
+    /**
+     * Port is set when passed to client in string
+     */
+    public function testCreateFromUrlSetsPort()
+    {
+        $client = Client::createFromUrl('https://example.co:8765/');
+        $this->assertSame(8765, $client->getConfig('port'));
+    }
+
+    /**
+     * Test exception is throw when no scheme is provided.
+     */
+    public function testCreateFromUrlThrowsInvalidArgumentExceptionWhenNoSchemeProvided()
+    {
+        $this->expectException(InvalidArgumentException::class);
+        Client::createFromUrl('example.co');
+        $message = $this->getExpectedExceptionMessage();
+        $this->assertSame('The URL was parsed but did not contain a scheme or host', $message);
+    }
+
+    /**
+     * Test exception is thrown if passed URL has no domain
+     */
+    public function testCreateFromUrlThrowsInvalidArgumentExceptionWhenNoDomainProvided()
+    {
+        $this->expectException(InvalidArgumentException::class);
+        Client::createFromUrl('/api/v1');
+        $message = $this->getExpectedExceptionMessage();
+        $this->assertSame('The URL was parsed but did not contain a scheme or host', $message);
+    }
+
+    /**
+     * Test that the passed parsed URL parts won't override other constructor defaults
+     * or add undefined configuration
+     */
+    public function testCreateFromUrlOnlySetSchemePortHostBasePath()
+    {
+        $client = Client::createFromUrl('http://example.co:80/some/uri/?foo=bar');
+        $config = $client->getConfig();
+        $expected = [
+            'adapter' => null,
+            'host' => 'example.co',
+            'port' => 80,
+            'scheme' => 'http',
+            'basePath' => '/some/uri/',
+            'timeout' => 30,
+            'ssl_verify_peer' => true,
+            'ssl_verify_peer_name' => true,
+            'ssl_verify_depth' => 5,
+            'ssl_verify_host' => true,
+            'redirect' => false,
+            'protocolVersion' => '1.1',
+        ];
+        $this->assertSame($expected, $config);
     }
 }

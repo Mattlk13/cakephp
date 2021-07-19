@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * NumberTest file
  *
@@ -25,13 +27,24 @@ use Cake\TestSuite\TestCase;
  */
 class NumberTest extends TestCase
 {
+    /**
+     * @var \Cake\I18n\Number
+     */
+    protected $Number;
+
+    /**
+     * Backup the locale property
+     *
+     * @var string
+     */
+    protected $locale;
 
     /**
      * setUp method
      *
      * @return void
      */
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
         $this->Number = new Number();
@@ -43,12 +56,13 @@ class NumberTest extends TestCase
      *
      * @return void
      */
-    public function tearDown()
+    public function tearDown(): void
     {
         parent::tearDown();
         unset($this->Number);
         I18n::setLocale($this->locale);
-        Number::defaultCurrency(false);
+        Number::setDefaultCurrency();
+        Number::setDefaultCurrencyFormat();
     }
 
     /**
@@ -62,35 +76,35 @@ class NumberTest extends TestCase
 
         $result = $this->Number->format($value);
         $expected = '100,100,100';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->format($value, ['before' => '#']);
         $expected = '#100,100,100';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->format($value, ['places' => 3]);
         $expected = '100,100,100.000';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->format($value, ['locale' => 'es_VE']);
         $expected = '100.100.100';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $value = 0.00001;
         $result = $this->Number->format($value, ['places' => 1, 'before' => '$']);
         $expected = '$0.0';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $value = -0.00001;
         $result = $this->Number->format($value, ['places' => 1, 'before' => '$']);
         $expected = '$-0.0';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $value = 1.23;
         $options = ['locale' => 'fr_FR', 'after' => ' €'];
         $result = $this->Number->format($value, $options);
         $expected = '1,23 €';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -104,18 +118,18 @@ class NumberTest extends TestCase
         $value = '1.234.567,891';
         $result = $this->Number->parseFloat($value);
         $expected = 1234567.891;
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         I18n::setLocale('pt_BR');
         $value = '1.234,37';
         $result = $this->Number->parseFloat($value);
         $expected = 1234.37;
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $value = '1,234.37';
         $result = $this->Number->parseFloat($value, ['locale' => 'en_US']);
         $expected = 1234.37;
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -129,38 +143,38 @@ class NumberTest extends TestCase
 
         $result = $this->Number->formatDelta($value, ['places' => 0]);
         $expected = '+100,100,100';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->formatDelta($value, ['before' => '', 'after' => '']);
         $expected = '+100,100,100';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->formatDelta($value, ['before' => '[', 'after' => ']']);
         $expected = '[+100,100,100]';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->formatDelta(-$value, ['before' => '[', 'after' => ']']);
         $expected = '[-100,100,100]';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->formatDelta(-$value, ['before' => '[ ', 'after' => ' ]']);
         $expected = '[ -100,100,100 ]';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $value = 0;
         $result = $this->Number->formatDelta($value, ['places' => 1, 'before' => '[', 'after' => ']']);
         $expected = '[0.0]';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $value = 0.0001;
         $result = $this->Number->formatDelta($value, ['places' => 1, 'before' => '[', 'after' => ']']);
         $expected = '[0.0]';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $value = 9876.1234;
         $result = $this->Number->formatDelta($value, ['places' => 1, 'locale' => 'de_DE']);
         $expected = '+9.876,1';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -174,112 +188,108 @@ class NumberTest extends TestCase
 
         $result = $this->Number->currency($value);
         $expected = '$100,100,100.00';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency($value, 'USD');
         $expected = '$100,100,100.00';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency($value, 'EUR');
         $expected = '€100,100,100.00';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency($value, 'EUR', ['locale' => 'de_DE']);
         $expected = '100.100.100,00 €';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency($value, 'USD', ['locale' => 'de_DE']);
         $expected = '100.100.100,00 $';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency($value, 'USD', ['locale' => 'en_US']);
         $expected = '$100,100,100.00';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency($value, 'USD', ['locale' => 'en_CA']);
         $expected = 'US$100,100,100.00';
-        $this->assertEquals($expected, $result);
-
-        $result = $this->Number->currency($value, 'INR', ['locale' => 'en_IN']);
-        $expected = '₹ 10,01,00,100.00';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $options = ['locale' => 'en_IN', 'pattern' => "Rs'.' #,##,###"];
         $result = $this->Number->currency($value, 'INR', $options);
         $expected = 'Rs. 10,01,00,100';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency($value, 'GBP');
         $expected = '£100,100,100.00';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency($value, 'GBP', ['locale' => 'da_DK']);
         $expected = '100.100.100,00 £';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $options = ['locale' => 'fr_FR', 'pattern' => 'EUR #,###.00'];
         $result = $this->Number->currency($value, 'EUR', $options);
         // The following tests use regexp because whitespace used
         // is inconsistent between *nix & windows.
         $expected = '/^EUR\W+100\W+100\W+100,00$/';
-        $this->assertRegExp($expected, $result);
+        $this->assertMatchesRegularExpression($expected, $result);
 
         $options = ['locale' => 'fr_FR', 'pattern' => '#,###.00 ¤¤'];
         $result = $this->Number->currency($value, 'EUR', $options);
         $expected = '/^100\W+100\W+100,00\W+EUR$/';
-        $this->assertRegExp($expected, $result);
+        $this->assertMatchesRegularExpression($expected, $result);
 
         $options = ['locale' => 'fr_FR', 'pattern' => '#,###.00;(¤#,###.00)'];
         $result = $this->Number->currency(-1235.03, 'EUR', $options);
         $expected = '/^\(€1\W+235,03\)$/';
-        $this->assertRegExp($expected, $result);
+        $this->assertMatchesRegularExpression($expected, $result);
 
         $result = $this->Number->currency(0.5, 'USD', ['locale' => 'en_US', 'fractionSymbol' => 'c']);
         $expected = '50c';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $options = ['fractionSymbol' => ' cents'];
         $result = $this->Number->currency(0.2, 'USD', $options);
         $expected = '20 cents';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $options = ['fractionSymbol' => 'cents ', 'fractionPosition' => 'before'];
         $result = $this->Number->currency(0.2, null, $options);
         $expected = 'cents 20';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency(0.2, 'EUR');
         $expected = '€0.20';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $options = ['fractionSymbol' => false, 'fractionPosition' => 'before'];
         $result = $this->Number->currency(0.5, null, $options);
         $expected = '$0.50';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency(0, 'GBP');
         $expected = '£0.00';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency(0, 'GBP', ['pattern' => '¤#,###.00;¤-#,###.00']);
         $expected = '£.00';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency(0, 'GBP', ['pattern' => '¤#,##0.00;¤-#,##0.00']);
         $expected = '£0.00';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency(0.00000, 'GBP');
         $expected = '£0.00';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency('0.00000', 'GBP');
         $expected = '£0.00';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency('22.389', 'CAD');
         $expected = 'CA$22.39';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -292,37 +302,87 @@ class NumberTest extends TestCase
     {
         $result = $this->Number->currency('1.23', 'EUR', ['locale' => 'de_DE', 'places' => 3]);
         $expected = '1,230 €';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency('0.23', 'GBP', ['places' => 3, 'fractionSymbol' => 'p']);
         $expected = '23p';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency('0.001', 'GBP', ['places' => 3, 'fractionSymbol' => 'p']);
         $expected = '0p';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency('1.23', 'EUR', ['locale' => 'de_DE', 'precision' => 1]);
         $expected = '1,2 €';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
      * Test default currency
      *
+     * @group deprecated
      * @return void
      */
     public function testDefaultCurrency()
     {
-        $result = $this->Number->defaultCurrency();
-        $this->assertEquals('USD', $result);
+        $this->deprecated(function () {
+            $this->assertSame('USD', $this->Number->defaultCurrency());
 
-        $this->Number->defaultCurrency(false);
+            $this->Number->defaultCurrency(false);
+            I18n::setLocale('es_ES');
+            $this->assertSame('EUR', $this->Number->defaultCurrency());
+
+            $this->Number->defaultCurrency('JPY');
+            $this->assertSame('JPY', $this->Number->defaultCurrency());
+        });
+    }
+
+    /**
+     * Test get default currency
+     *
+     * @return void
+     */
+    public function testGetDefaultCurrency()
+    {
+        $this->assertSame('USD', $this->Number->getDefaultCurrency());
+    }
+
+    /**
+     * Test set default currency
+     *
+     * @return void
+     */
+    public function testSetDefaultCurrency()
+    {
+        $this->Number->setDefaultCurrency();
         I18n::setLocale('es_ES');
-        $this->assertEquals('EUR', $this->Number->defaultCurrency());
+        $this->assertSame('EUR', $this->Number->getDefaultCurrency());
 
-        $this->Number->defaultCurrency('JPY');
-        $this->assertEquals('JPY', $this->Number->defaultCurrency());
+        $this->Number->setDefaultCurrency('JPY');
+        $this->assertSame('JPY', $this->Number->getDefaultCurrency());
+    }
+
+    /**
+     * Test get default currency format
+     *
+     * @return void
+     */
+    public function testGetDefaultCurrencyFormat()
+    {
+        $this->assertSame('currency', $this->Number->getDefaultCurrencyFormat());
+    }
+
+    /**
+     * Test set default currency format
+     *
+     * @return void
+     */
+    public function testSetDefaultCurrencyFormat()
+    {
+        $this->Number->setDefaultCurrencyFormat(Number::FORMAT_CURRENCY_ACCOUNTING);
+        $this->assertSame('currency_accounting', $this->Number->getDefaultCurrencyFormat());
+
+        $this->assertSame('($123.45)', $this->Number->currency(-123.45));
     }
 
     /**
@@ -336,11 +396,11 @@ class NumberTest extends TestCase
 
         $result = $this->Number->currency($value, 'EUR', ['locale' => 'de_DE']);
         $expected = '-0,99 €';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency($value, 'USD', ['fractionSymbol' => 'c']);
         $expected = '-99c';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -354,11 +414,11 @@ class NumberTest extends TestCase
 
         $result = $this->Number->currency($value, 'USD');
         $expected = '$0.00';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency($value, 'EUR', ['locale' => 'fr_FR']);
         $expected = '0,00 €';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -372,11 +432,11 @@ class NumberTest extends TestCase
 
         $result = $this->Number->currency($value, null, ['before' => 'Total: ']);
         $expected = 'Total: $1,234,567.89';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency($value, null, ['after' => ' in Total']);
         $expected = '$1,234,567.89 in Total';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -390,15 +450,15 @@ class NumberTest extends TestCase
         $value = '123';
         $result = $this->Number->currency($value, 'USD', ['useIntlCode' => true]);
         $expected = 'USD 123.00';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency($value, 'EUR', ['useIntlCode' => true]);
         $expected = 'EUR 123.00';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->currency($value, 'EUR', ['useIntlCode' => true, 'locale' => 'da_DK']);
         $expected = '123,00 EUR';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -410,7 +470,7 @@ class NumberTest extends TestCase
     {
         I18n::setLocale('fr_FR');
         $result = $this->Number->precision(1.234);
-        $this->assertEquals('1,234', $result);
+        $this->assertSame('1,234', $result);
     }
 
     /**
@@ -422,47 +482,55 @@ class NumberTest extends TestCase
     {
         $result = $this->Number->toPercentage(45, 0);
         $expected = '45%';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toPercentage(45, 2);
         $expected = '45.00%';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toPercentage(0, 0);
         $expected = '0%';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toPercentage(0, 4);
         $expected = '0.0000%';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toPercentage(45, 0, ['multiply' => false]);
         $expected = '45%';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toPercentage(45, 2, ['multiply' => false]);
         $expected = '45.00%';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toPercentage(0, 0, ['multiply' => false]);
         $expected = '0%';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toPercentage(0, 4, ['multiply' => false]);
         $expected = '0.0000%';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toPercentage(0.456, 0, ['multiply' => true]);
         $expected = '46%';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toPercentage(0.456, 2, ['multiply' => true]);
         $expected = '45.60%';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toPercentage(0.456, 2, ['locale' => 'de-DE', 'multiply' => true]);
-        $expected = '45,60%';
-        $this->assertEquals($expected, $result);
+        $expected = '45,60 %';
+        $this->assertSame($expected, $result);
+
+        $result = $this->Number->toPercentage(13, 0, ['locale' => 'fi_FI']);
+        $expected = '13 %';
+        $this->assertSame($expected, $result);
+
+        $result = $this->Number->toPercentage(0.13, 0, ['locale' => 'fi_FI', 'multiply' => true]);
+        $expected = '13 %';
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -474,63 +542,63 @@ class NumberTest extends TestCase
     {
         $result = $this->Number->toReadableSize(0);
         $expected = '0 Bytes';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toReadableSize(1);
         $expected = '1 Byte';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toReadableSize(45);
         $expected = '45 Bytes';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toReadableSize(1023);
         $expected = '1,023 Bytes';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toReadableSize(1024);
         $expected = '1 KB';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toReadableSize(1024 + 123);
         $expected = '1.12 KB';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toReadableSize(1024 * 512);
         $expected = '512 KB';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toReadableSize(1024 * 1024 - 1);
         $expected = '1 MB';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toReadableSize(512.05 * 1024 * 1024);
         $expected = '512.05 MB';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toReadableSize(1024 * 1024 * 1024 - 1);
         $expected = '1 GB';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toReadableSize(1024 * 1024 * 1024 * 512);
         $expected = '512 GB';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toReadableSize(1024 * 1024 * 1024 * 1024 - 1);
         $expected = '1 TB';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toReadableSize(1024 * 1024 * 1024 * 1024 * 512);
         $expected = '512 TB';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toReadableSize(1024 * 1024 * 1024 * 1024 * 1024 - 1);
         $expected = '1,024 TB';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $result = $this->Number->toReadableSize(1024 * 1024 * 1024 * 1024 * 1024 * 1024);
         $expected = '1,048,576 TB';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -542,10 +610,10 @@ class NumberTest extends TestCase
     {
         I18n::setLocale('fr_FR');
         $result = $this->Number->toReadableSize(1321205);
-        $this->assertEquals('1,26 MB', $result);
+        $this->assertSame('1,26 MB', $result);
 
         $result = $this->Number->toReadableSize(512.05 * 1024 * 1024 * 1024);
-        $this->assertEquals('512,05 GB', $result);
+        $this->assertSame('512,05 GB', $result);
     }
 
     /**
@@ -555,15 +623,15 @@ class NumberTest extends TestCase
      */
     public function testConfig()
     {
-        $result = $this->Number->currency(15000, 'INR', ['locale' => 'en_IN']);
-        $this->assertEquals('₹ 15,000.00', $result);
+        $result = $this->Number->currency(150000, 'USD', ['locale' => 'en_US']);
+        $this->assertSame('$150,000.00', $result);
 
-        Number::config('en_IN', \NumberFormatter::CURRENCY, [
-            'pattern' => '¤ #,##,##0'
+        Number::config('en_US', \NumberFormatter::CURRENCY, [
+            'pattern' => '¤ #,##,##0',
         ]);
 
-        $result = $this->Number->currency(15000, 'INR', ['locale' => 'en_IN']);
-        $this->assertEquals('₹ 15,000', $result);
+        $result = $this->Number->currency(150000, 'USD', ['locale' => 'en_US']);
+        $this->assertSame('$ 1,50,000', $result);
     }
 
     /**
@@ -575,27 +643,27 @@ class NumberTest extends TestCase
     {
         I18n::setLocale('en_US');
         $result = $this->Number->ordinal(1);
-        $this->assertEquals('1st', $result);
+        $this->assertSame('1st', $result);
 
         $result = $this->Number->ordinal(2);
-        $this->assertEquals('2nd', $result);
+        $this->assertSame('2nd', $result);
 
         $result = $this->Number->ordinal(2, [
-            'locale' => 'fr_FR'
+            'locale' => 'fr_FR',
         ]);
-        $this->assertEquals('2e', $result);
+        $this->assertSame('2e', $result);
 
         $result = $this->Number->ordinal(3);
-        $this->assertEquals('3rd', $result);
+        $this->assertSame('3rd', $result);
 
         $result = $this->Number->ordinal(4);
-        $this->assertEquals('4th', $result);
+        $this->assertSame('4th', $result);
 
         I18n::setLocale('fr_FR');
         $result = $this->Number->ordinal(1);
-        $this->assertEquals('1er', $result);
+        $this->assertSame('1er', $result);
 
         $result = $this->Number->ordinal(2);
-        $this->assertEquals('2e', $result);
+        $this->assertSame('2e', $result);
     }
 }

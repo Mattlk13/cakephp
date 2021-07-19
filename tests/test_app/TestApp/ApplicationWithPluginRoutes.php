@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -15,6 +17,7 @@
 namespace TestApp;
 
 use Cake\Http\BaseApplication;
+use Cake\Http\MiddlewareQueue;
 use Cake\Routing\Middleware\RoutingMiddleware;
 use Cake\Routing\RouteBuilder;
 
@@ -23,22 +26,21 @@ class ApplicationWithPluginRoutes extends BaseApplication
     /**
      * @return void
      */
-    public function bootstrap()
+    public function bootstrap(): void
     {
         parent::bootstrap();
         $this->addPlugin('TestPlugin');
     }
 
     /**
-     * @param \Cake\Http\MiddlewareQueue $middleware
-     *
+     * @param \Cake\Http\MiddlewareQueue $middlewareQueue
      * @return \Cake\Http\MiddlewareQueue
      */
-    public function middleware($middleware)
+    public function middleware(MiddlewareQueue $middlewareQueue): MiddlewareQueue
     {
-        $middleware->add(new RoutingMiddleware($this));
+        $middlewareQueue->add(new RoutingMiddleware($this));
 
-        return $middleware;
+        return $middlewareQueue;
     }
 
     /**
@@ -47,7 +49,7 @@ class ApplicationWithPluginRoutes extends BaseApplication
      * @param \Cake\Routing\RouteBuilder $routes
      * @return void
      */
-    public function routes($routes)
+    public function routes(RouteBuilder $routes): void
     {
         $routes->scope('/app', function (RouteBuilder $routes) {
             $routes->connect('/articles', ['controller' => 'Articles']);

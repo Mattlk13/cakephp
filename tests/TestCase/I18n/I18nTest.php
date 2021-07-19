@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -14,10 +16,11 @@
  */
 namespace Cake\Test\TestCase\I18n;
 
-use Aura\Intl\Package;
 use Cake\Cache\Cache;
-use Cake\Core\Plugin;
 use Cake\I18n\I18n;
+use Cake\I18n\Package;
+use Cake\I18n\Translator;
+use Cake\I18n\TranslatorRegistry;
 use Cake\TestSuite\TestCase;
 use Locale;
 
@@ -26,20 +29,19 @@ use Locale;
  */
 class I18nTest extends TestCase
 {
-
     /**
      * Used to restore the internal locale after tests
      *
      * @var string
      */
-    public $locale;
+    protected $locale;
 
     /**
      * Set Up
      *
      * @return void
      */
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
         $this->locale = Locale::getDefault() ?: I18n::DEFAULT_LOCALE;
@@ -50,30 +52,27 @@ class I18nTest extends TestCase
      *
      * @return void
      */
-    public function tearDown()
+    public function tearDown(): void
     {
         parent::tearDown();
         I18n::clear();
         I18n::setDefaultFormatter('default');
         I18n::setLocale($this->locale);
         $this->clearPlugins();
-        Cache::clear(false, '_cake_core_');
+        Cache::clear('_cake_core_');
     }
 
     /**
      * Tests that the default locale is set correctly
      *
-     * @group deprecated
      * @return void
      */
     public function testDefaultLocale()
     {
-        $this->deprecated(function () {
-            $newLocale = 'de_DE';
-            I18n::setLocale($newLocale);
-            $this->assertEquals($newLocale, I18n::getLocale());
-            $this->assertEquals($this->locale, I18n::getDefaultLocale());
-        });
+        $newLocale = 'de_DE';
+        I18n::setLocale($newLocale);
+        $this->assertSame($newLocale, I18n::getLocale());
+        $this->assertSame($this->locale, I18n::getDefaultLocale());
     }
 
     /**
@@ -85,8 +84,8 @@ class I18nTest extends TestCase
     public function testGetDefaultTranslator()
     {
         $translator = I18n::getTranslator();
-        $this->assertInstanceOf('Aura\Intl\TranslatorInterface', $translator);
-        $this->assertEquals('%d is 1 (po translated)', $translator->translate('%d = 1'));
+        $this->assertInstanceOf(Translator::class, $translator);
+        $this->assertSame('%d is 1 (po translated)', $translator->translate('%d = 1'));
         $this->assertSame($translator, I18n::getTranslator(), 'backwards compat works');
     }
 
@@ -98,7 +97,7 @@ class I18nTest extends TestCase
     public function testGetTranslatorLoadMoFile()
     {
         $translator = I18n::getTranslator('default', 'es_ES');
-        $this->assertEquals('Plural Rule 6 (translated)', $translator->translate('Plural Rule 1'));
+        $this->assertSame('Plural Rule 6 (translated)', $translator->translate('Plural Rule 1'));
     }
 
     /**
@@ -107,15 +106,15 @@ class I18nTest extends TestCase
      *
      * @return void
      */
-    public function testPluralSelection()
+    public function testPluralSelectionSprintfFormatter()
     {
         I18n::setDefaultFormatter('sprintf');
         $translator = I18n::getTranslator(); // en_US
-        $result = $translator->translate('%d = 0 or > 1', ['_count' => 1]);
-        $this->assertEquals('1 is 1 (po translated)', $result);
+        $result = $translator->translate('%d = 0 or > 1', ['_count' => 1, 1]);
+        $this->assertSame('1 is 1 (po translated)', $result);
 
-        $result = $translator->translate('%d = 0 or > 1', ['_count' => 2]);
-        $this->assertEquals('2 is 2-4 (po translated)', $result);
+        $result = $translator->translate('%d = 0 or > 1', ['_count' => 2, 2]);
+        $this->assertSame('2 is 2-4 (po translated)', $result);
     }
 
     /**
@@ -128,10 +127,10 @@ class I18nTest extends TestCase
     {
         $translator = I18n::getTranslator('special');
         $result = $translator->translate('There are {0} things', ['_count' => 2, 'plenty']);
-        $this->assertEquals('There are plenty things', $result);
+        $this->assertSame('There are plenty things', $result);
 
         $result = $translator->translate('There are {0} things', ['_count' => 1]);
-        $this->assertEquals('There is only one', $result);
+        $this->assertSame('There is only one', $result);
     }
 
     /**
@@ -143,13 +142,13 @@ class I18nTest extends TestCase
     {
         $translator = I18n::getTranslator('default', 'ru');
         $result = $translator->translate('{0} months', ['_count' => 1, 1]);
-        $this->assertEquals('1 months ends in 1, not 11', $result);
+        $this->assertSame('1 months ends in 1, not 11', $result);
 
         $result = $translator->translate('{0} months', ['_count' => 2, 2]);
-        $this->assertEquals('2 months ends in 2-4, not 12-14', $result);
+        $this->assertSame('2 months ends in 2-4, not 12-14', $result);
 
         $result = $translator->translate('{0} months', ['_count' => 7, 7]);
-        $this->assertEquals('7 months everything else', $result);
+        $this->assertSame('7 months everything else', $result);
     }
 
     /**
@@ -162,14 +161,14 @@ class I18nTest extends TestCase
         I18n::setTranslator('custom', function () {
             $package = new Package('default');
             $package->setMessages([
-                'Cow' => 'Le moo'
+                'Cow' => 'Le moo',
             ]);
 
             return $package;
         }, 'fr_FR');
 
         $translator = I18n::getTranslator('custom', 'fr_FR');
-        $this->assertEquals('Le moo', $translator->translate('Cow'));
+        $this->assertSame('Le moo', $translator->translate('Cow'));
     }
 
     /**
@@ -182,17 +181,17 @@ class I18nTest extends TestCase
     {
         $this->loadPlugins([
             'TestPlugin',
-            'Company/TestPluginThree'
+            'Company/TestPluginThree',
         ]);
 
         $translator = I18n::getTranslator('test_plugin');
-        $this->assertEquals(
+        $this->assertSame(
             'Plural Rule 1 (from plugin)',
             $translator->translate('Plural Rule 1')
         );
 
         $translator = I18n::getTranslator('company/test_plugin_three');
-        $this->assertEquals(
+        $this->assertSame(
             'String 1 (from plugin three)',
             $translator->translate('String 1')
         );
@@ -208,7 +207,7 @@ class I18nTest extends TestCase
     {
         $this->loadPlugins(['TestTheme']);
         $translator = I18n::getTranslator('test_theme');
-        $this->assertEquals(
+        $this->assertSame(
             'translated',
             $translator->translate('A Message')
         );
@@ -221,11 +220,11 @@ class I18nTest extends TestCase
      */
     public function testGetDefaultLocale()
     {
-        $this->assertEquals('en_US', I18n::getLocale());
-        $this->assertEquals('en_US', ini_get('intl.default_locale'));
+        $this->assertSame('en_US', I18n::getLocale());
+        $this->assertSame('en_US', ini_get('intl.default_locale'));
         I18n::setLocale('fr_FR');
-        $this->assertEquals('fr_FR', I18n::getLocale());
-        $this->assertEquals('fr_FR', ini_get('intl.default_locale'));
+        $this->assertSame('fr_FR', I18n::getLocale());
+        $this->assertSame('fr_FR', ini_get('intl.default_locale'));
     }
 
     /**
@@ -239,7 +238,7 @@ class I18nTest extends TestCase
         I18n::setTranslator('custom', function () {
             $package = new Package('default');
             $package->setMessages([
-                'Cow' => 'Le moo'
+                'Cow' => 'Le moo',
             ]);
 
             return $package;
@@ -247,7 +246,7 @@ class I18nTest extends TestCase
 
         I18n::setLocale('fr_FR');
         $translator = I18n::getTranslator('custom');
-        $this->assertEquals('Le moo', $translator->translate('Cow'));
+        $this->assertSame('Le moo', $translator->translate('Cow'));
     }
 
     /**
@@ -258,11 +257,11 @@ class I18nTest extends TestCase
     public function testBasicTranslateFunction()
     {
         I18n::setDefaultFormatter('sprintf');
-        $this->assertEquals('%d is 1 (po translated)', __('%d = 1'));
-        $this->assertEquals('1 is 1 (po translated)', __('%d = 1', 1));
-        $this->assertEquals('1 is 1 (po translated)', __('%d = 1', [1]));
-        $this->assertEquals('The red dog, and blue cat', __('The %s dog, and %s cat', ['red', 'blue']));
-        $this->assertEquals('The red dog, and blue cat', __('The %s dog, and %s cat', 'red', 'blue'));
+        $this->assertSame('%d is 1 (po translated)', __('%d = 1'));
+        $this->assertSame('1 is 1 (po translated)', __('%d = 1', 1));
+        $this->assertSame('1 is 1 (po translated)', __('%d = 1', [1]));
+        $this->assertSame('The red dog, and blue cat', __('The %s dog, and %s cat', ['red', 'blue']));
+        $this->assertSame('The red dog, and blue cat', __('The %s dog, and %s cat', 'red', 'blue'));
     }
 
     /**
@@ -272,29 +271,29 @@ class I18nTest extends TestCase
      */
     public function testBasicTranslateFunctionsWithNullParam()
     {
-        $this->assertEquals('text {0}', __('text {0}'));
-        $this->assertEquals('text ', __('text {0}', null));
+        $this->assertSame('text {0}', __('text {0}'));
+        $this->assertSame('text ', __('text {0}', null));
 
-        $this->assertEquals('text {0}', __n('text {0}', 'texts {0}', 1));
-        $this->assertEquals('text ', __n('text {0}', 'texts {0}', 1, null));
+        $this->assertSame('text {0}', __n('text {0}', 'texts {0}', 1));
+        $this->assertSame('text ', __n('text {0}', 'texts {0}', 1, null));
 
-        $this->assertEquals('text {0}', __d('default', 'text {0}'));
-        $this->assertEquals('text ', __d('default', 'text {0}', null));
+        $this->assertSame('text {0}', __d('default', 'text {0}'));
+        $this->assertSame('text ', __d('default', 'text {0}', null));
 
-        $this->assertEquals('text {0}', __dn('default', 'text {0}', 'texts {0}', 1));
-        $this->assertEquals('text ', __dn('default', 'text {0}', 'texts {0}', 1, null));
+        $this->assertSame('text {0}', __dn('default', 'text {0}', 'texts {0}', 1));
+        $this->assertSame('text ', __dn('default', 'text {0}', 'texts {0}', 1, null));
 
-        $this->assertEquals('text {0}', __x('default', 'text {0}'));
-        $this->assertEquals('text ', __x('default', 'text {0}', null));
+        $this->assertSame('text {0}', __x('default', 'text {0}'));
+        $this->assertSame('text ', __x('default', 'text {0}', null));
 
-        $this->assertEquals('text {0}', __xn('default', 'text {0}', 'texts {0}', 1));
-        $this->assertEquals('text ', __xn('default', 'text {0}', 'texts {0}', 1, null));
+        $this->assertSame('text {0}', __xn('default', 'text {0}', 'texts {0}', 1));
+        $this->assertSame('text ', __xn('default', 'text {0}', 'texts {0}', 1, null));
 
-        $this->assertEquals('text {0}', __dx('default', 'words', 'text {0}'));
-        $this->assertEquals('text ', __dx('default', 'words', 'text {0}', null));
+        $this->assertSame('text {0}', __dx('default', 'words', 'text {0}'));
+        $this->assertSame('text ', __dx('default', 'words', 'text {0}', null));
 
-        $this->assertEquals('text {0}', __dxn('default', 'words', 'text {0}', 'texts {0}', 1));
-        $this->assertEquals('text ', __dxn('default', 'words', 'text {0}', 'texts {0}', 1, null));
+        $this->assertSame('text {0}', __dxn('default', 'words', 'text {0}', 'texts {0}', 1));
+        $this->assertSame('text ', __dxn('default', 'words', 'text {0}', 'texts {0}', 1, null));
     }
 
     /**
@@ -305,7 +304,7 @@ class I18nTest extends TestCase
     public function testBasicTranslateFunctionPluralData()
     {
         I18n::setDefaultFormatter('sprintf');
-        $this->assertEquals('%d is 1 (po translated)', __('%d = 0 or > 1'));
+        $this->assertSame('%d is 1 (po translated)', __('%d = 0 or > 1'));
     }
 
     /**
@@ -316,17 +315,17 @@ class I18nTest extends TestCase
     public function testBasicTranslatePluralFunction()
     {
         I18n::setDefaultFormatter('sprintf');
-        $result = __n('singular msg', '%d = 0 or > 1', 1);
-        $this->assertEquals('1 is 1 (po translated)', $result);
+        $result = __n('singular msg', '%d = 0 or > 1', 1, 1);
+        $this->assertSame('1 is 1 (po translated)', $result);
 
-        $result = __n('singular msg', '%d = 0 or > 1', 2);
-        $this->assertEquals('2 is 2-4 (po translated)', $result);
+        $result = __n('singular msg', '%d = 0 or > 1', 2, 2);
+        $this->assertSame('2 is 2-4 (po translated)', $result);
 
-        $result = __n('%s %s and %s are good', '%s and %s are best', 1, ['red', 'blue']);
-        $this->assertEquals('1 red and blue are good', $result);
+        $result = __n('%s, %s, and %s are good', '%s, %s, and %s are best', 1, ['red', 'blue', 'green']);
+        $this->assertSame('red, blue, and green are good', $result);
 
-        $result = __n('%s %s and %s are good', '%s and %s are best', 1, 'red', 'blue');
-        $this->assertEquals('1 red and blue are good', $result);
+        $result = __n('%s, %s, and %s are good', '%s, %s, and %s are best', 1, 'red', 'blue', 'green');
+        $this->assertSame('red, blue, and green are good', $result);
     }
 
     /**
@@ -338,7 +337,7 @@ class I18nTest extends TestCase
     {
         I18n::setDefaultFormatter('sprintf');
         $result = __n('No translation needed', 'not used', 1);
-        $this->assertEquals('No translation needed', $result);
+        $this->assertSame('No translation needed', $result);
     }
 
     /**
@@ -359,17 +358,17 @@ class I18nTest extends TestCase
 
             return $package;
         }, 'en_US');
-        $this->assertEquals('Le moo', __d('custom', 'Cow'));
-        $this->assertEquals('Unknown', __d('custom', 'Unknown'));
+        $this->assertSame('Le moo', __d('custom', 'Cow'));
+        $this->assertSame('Unknown', __d('custom', 'Unknown'));
 
         $result = __d('custom', 'The {0} is tasty', ['fruit']);
-        $this->assertEquals('The fruit is delicious', $result);
+        $this->assertSame('The fruit is delicious', $result);
 
         $result = __d('custom', 'The {0} is tasty', 'fruit');
-        $this->assertEquals('The fruit is delicious', $result);
+        $this->assertSame('The fruit is delicious', $result);
 
         $result = __d('custom', 'Average price {0}', ['9.99']);
-        $this->assertEquals('Price Average 9.99', $result);
+        $this->assertSame('Price Average 9.99', $result);
     }
 
     /**
@@ -385,20 +384,20 @@ class I18nTest extends TestCase
                 'Cow' => 'Le Moo',
                 'Cows' => [
                     'Le Moo',
-                    'Les Moos'
+                    'Les Moos',
                 ],
                 '{0} years' => [
                     '',
-                    ''
-                ]
+                    '',
+                ],
             ]);
 
             return $package;
         }, 'en_US');
-        $this->assertEquals('Le Moo', __dn('custom', 'Cow', 'Cows', 1));
-        $this->assertEquals('Les Moos', __dn('custom', 'Cow', 'Cows', 2));
-        $this->assertEquals('{0} years', __dn('custom', '{0} year', '{0} years', 1));
-        $this->assertEquals('{0} years', __dn('custom', '{0} year', '{0} years', 2));
+        $this->assertSame('Le Moo', __dn('custom', 'Cow', 'Cows', 1));
+        $this->assertSame('Les Moos', __dn('custom', 'Cow', 'Cows', 2));
+        $this->assertSame('{0} years', __dn('custom', '{0} year', '{0} years', 1));
+        $this->assertSame('{0} years', __dn('custom', '{0} year', '{0} years', 2));
     }
 
     /**
@@ -414,46 +413,46 @@ class I18nTest extends TestCase
                 'letter' => [
                     '_context' => [
                         'character' => 'The letter {0}',
-                        'communication' => 'She wrote a letter to {0}'
-                    ]
+                        'communication' => 'She wrote a letter to {0}',
+                    ],
                 ],
                 'letters' => [
                     '_context' => [
                         'character' => [
                             'The letter {0}',
-                            'The letters {0} and {1}'
+                            'The letters {0} and {1}',
                         ],
                         'communication' => [
                             'She wrote a letter to {0}',
-                            'She wrote a letter to {0} and {1}'
-                        ]
-                    ]
-                ]
+                            'She wrote a letter to {0} and {1}',
+                        ],
+                    ],
+                ],
             ]);
 
             return $package;
         }, 'en_US');
 
-        $this->assertEquals('The letters A and B', __x('character', 'letters', ['A', 'B']));
-        $this->assertEquals('The letter A', __x('character', 'letter', ['A']));
+        $this->assertSame('The letters A and B', __x('character', 'letters', ['A', 'B']));
+        $this->assertSame('The letter A', __x('character', 'letter', ['A']));
 
-        $this->assertEquals('The letters A and B', __x('character', 'letters', 'A', 'B'));
-        $this->assertEquals('The letter A', __x('character', 'letter', 'A'));
+        $this->assertSame('The letters A and B', __x('character', 'letters', 'A', 'B'));
+        $this->assertSame('The letter A', __x('character', 'letter', 'A'));
 
-        $this->assertEquals(
+        $this->assertSame(
             'She wrote a letter to Thomas and Sara',
             __x('communication', 'letters', ['Thomas', 'Sara'])
         );
-        $this->assertEquals(
+        $this->assertSame(
             'She wrote a letter to Thomas',
             __x('communication', 'letter', ['Thomas'])
         );
 
-        $this->assertEquals(
+        $this->assertSame(
             'She wrote a letter to Thomas and Sara',
             __x('communication', 'letters', 'Thomas', 'Sara')
         );
-        $this->assertEquals(
+        $this->assertSame(
             'She wrote a letter to Thomas',
             __x('communication', 'letter', 'Thomas')
         );
@@ -472,15 +471,15 @@ class I18nTest extends TestCase
                 'letter' => [
                     '_context' => [
                         'character' => '',
-                    ]
-                ]
+                    ],
+                ],
             ]);
 
             return $package;
         }, 'en_US');
 
-        $this->assertEquals('letter', __x('character', 'letter'));
-        $this->assertEquals('letter', __x('unknown', 'letter'));
+        $this->assertSame('letter', __x('character', 'letter'));
+        $this->assertSame('letter', __x('unknown', 'letter'));
     }
 
     /**
@@ -496,15 +495,15 @@ class I18nTest extends TestCase
                 'letter' => [
                     '_context' => [
                         'noun' => 'a paper letter',
-                    ]
-                ]
+                    ],
+                ],
             ]);
 
             return $package;
         }, 'en_US');
 
-        $this->assertEquals('letter', __x('garbage', 'letter'));
-        $this->assertEquals('a paper letter', __('letter'));
+        $this->assertSame('letter', __x('garbage', 'letter'));
+        $this->assertSame('a paper letter', __('letter'));
     }
 
     /**
@@ -521,41 +520,41 @@ class I18nTest extends TestCase
                     '_context' => [
                         'character' => 'The letter {0}',
                         'communication' => 'She wrote a letter to {0}',
-                    ]
+                    ],
                 ],
                 'letters' => [
                     '_context' => [
                         'character' => [
                             'The letter {0}',
-                            'The letters {0} and {1}'
+                            'The letters {0} and {1}',
                         ],
                         'communication' => [
                             'She wrote a letter to {0}',
-                            'She wrote a letter to {0} and {1}'
-                        ]
-                    ]
-                ]
+                            'She wrote a letter to {0} and {1}',
+                        ],
+                    ],
+                ],
             ]);
 
             return $package;
         }, 'en_US');
-        $this->assertEquals('The letters A and B', __xn('character', 'letter', 'letters', 2, ['A', 'B']));
-        $this->assertEquals('The letter A', __xn('character', 'letter', 'letters', 1, ['A']));
+        $this->assertSame('The letters A and B', __xn('character', 'letter', 'letters', 2, ['A', 'B']));
+        $this->assertSame('The letter A', __xn('character', 'letter', 'letters', 1, ['A']));
 
-        $this->assertEquals(
+        $this->assertSame(
             'She wrote a letter to Thomas and Sara',
             __xn('communication', 'letter', 'letters', 2, ['Thomas', 'Sara'])
         );
-        $this->assertEquals(
+        $this->assertSame(
             'She wrote a letter to Thomas',
             __xn('communication', 'letter', 'letters', 1, ['Thomas'])
         );
 
-        $this->assertEquals(
+        $this->assertSame(
             'She wrote a letter to Thomas and Sara',
             __xn('communication', 'letter', 'letters', 2, 'Thomas', 'Sara')
         );
-        $this->assertEquals(
+        $this->assertSame(
             'She wrote a letter to Thomas',
             __xn('communication', 'letter', 'letters', 1, 'Thomas')
         );
@@ -574,43 +573,43 @@ class I18nTest extends TestCase
                 'letter' => [
                     '_context' => [
                         'character' => 'The letter {0}',
-                        'communication' => 'She wrote a letter to {0}'
-                    ]
+                        'communication' => 'She wrote a letter to {0}',
+                    ],
                 ],
                 'letters' => [
                     '_context' => [
                         'character' => [
                             'The letter {0}',
-                            'The letters {0} and {1}'
+                            'The letters {0} and {1}',
                         ],
                         'communication' => [
                             'She wrote a letter to {0}',
-                            'She wrote a letter to {0} and {1}'
-                        ]
-                    ]
-                ]
+                            'She wrote a letter to {0} and {1}',
+                        ],
+                    ],
+                ],
             ]);
 
             return $package;
         }, 'en_US');
 
-        $this->assertEquals('The letters A and B', __dx('custom', 'character', 'letters', ['A', 'B']));
-        $this->assertEquals('The letter A', __dx('custom', 'character', 'letter', ['A']));
+        $this->assertSame('The letters A and B', __dx('custom', 'character', 'letters', ['A', 'B']));
+        $this->assertSame('The letter A', __dx('custom', 'character', 'letter', ['A']));
 
-        $this->assertEquals(
+        $this->assertSame(
             'She wrote a letter to Thomas and Sara',
             __dx('custom', 'communication', 'letters', ['Thomas', 'Sara'])
         );
-        $this->assertEquals(
+        $this->assertSame(
             'She wrote a letter to Thomas',
             __dx('custom', 'communication', 'letter', ['Thomas'])
         );
 
-        $this->assertEquals(
+        $this->assertSame(
             'She wrote a letter to Thomas and Sara',
             __dx('custom', 'communication', 'letters', 'Thomas', 'Sara')
         );
-        $this->assertEquals(
+        $this->assertSame(
             'She wrote a letter to Thomas',
             __dx('custom', 'communication', 'letter', 'Thomas')
         );
@@ -630,47 +629,47 @@ class I18nTest extends TestCase
                     '_context' => [
                         'character' => 'The letter {0}',
                         'communication' => 'She wrote a letter to {0}',
-                    ]
+                    ],
                 ],
                 'letters' => [
                     '_context' => [
                         'character' => [
                             'The letter {0}',
-                            'The letters {0} and {1}'
+                            'The letters {0} and {1}',
                         ],
                         'communication' => [
                             'She wrote a letter to {0}',
-                            'She wrote a letter to {0} and {1}'
-                        ]
-                    ]
-                ]
+                            'She wrote a letter to {0} and {1}',
+                        ],
+                    ],
+                ],
             ]);
 
             return $package;
         }, 'en_US');
-        $this->assertEquals(
+        $this->assertSame(
             'The letters A and B',
             __dxn('custom', 'character', 'letter', 'letters', 2, ['A', 'B'])
         );
-        $this->assertEquals(
+        $this->assertSame(
             'The letter A',
             __dxn('custom', 'character', 'letter', 'letters', 1, ['A'])
         );
 
-        $this->assertEquals(
+        $this->assertSame(
             'She wrote a letter to Thomas and Sara',
             __dxn('custom', 'communication', 'letter', 'letters', 2, ['Thomas', 'Sara'])
         );
-        $this->assertEquals(
+        $this->assertSame(
             'She wrote a letter to Thomas',
             __dxn('custom', 'communication', 'letter', 'letters', 1, ['Thomas'])
         );
 
-        $this->assertEquals(
+        $this->assertSame(
             'She wrote a letter to Thomas and Sara',
             __dxn('custom', 'communication', 'letter', 'letters', 2, 'Thomas', 'Sara')
         );
-        $this->assertEquals(
+        $this->assertSame(
             'She wrote a letter to Thomas',
             __dxn('custom', 'communication', 'letter', 'letters', 1, 'Thomas')
         );
@@ -705,17 +704,17 @@ class I18nTest extends TestCase
      */
     public function testLoaderFactory()
     {
-        I18n::config('custom', function ($name, $locale) {
-            $this->assertEquals('custom', $name);
+        I18n::config('custom', function (string $name, string $locale) {
+            $this->assertSame('custom', $name);
             $package = new Package('default');
 
-            if ($locale == 'fr_FR') {
+            if ($locale === 'fr_FR') {
                 $package->setMessages([
                 'Cow' => 'Le Moo',
                 'Cows' => [
                     'Le Moo',
-                    'Les Moos'
-                    ]
+                    'Les Moos',
+                    ],
                 ]);
             }
 
@@ -724,8 +723,8 @@ class I18nTest extends TestCase
                 'Cow' => 'El Moo',
                 'Cows' => [
                     'El Moo',
-                    'Los Moos'
-                    ]
+                    'Los Moos',
+                    ],
                 ]);
             }
 
@@ -733,15 +732,15 @@ class I18nTest extends TestCase
         });
 
         $translator = I18n::getTranslator('custom', 'fr_FR');
-        $this->assertEquals('Le Moo', $translator->translate('Cow'));
-        $this->assertEquals('Les Moos', $translator->translate('Cows', ['_count' => 2]));
+        $this->assertSame('Le Moo', $translator->translate('Cow'));
+        $this->assertSame('Les Moos', $translator->translate('Cows', ['_count' => 2]));
 
         $translator = I18n::getTranslator('custom', 'es_ES');
-        $this->assertEquals('El Moo', $translator->translate('Cow'));
-        $this->assertEquals('Los Moos', $translator->translate('Cows', ['_count' => 2]));
+        $this->assertSame('El Moo', $translator->translate('Cow'));
+        $this->assertSame('Los Moos', $translator->translate('Cows', ['_count' => 2]));
 
         $translator = I18n::getTranslator();
-        $this->assertEquals('%d is 1 (po translated)', $translator->translate('%d = 1'));
+        $this->assertSame('%d is 1 (po translated)', $translator->translate('%d = 1'));
     }
 
     /**
@@ -751,10 +750,10 @@ class I18nTest extends TestCase
      */
     public function testFallbackLoaderFactory()
     {
-        I18n::config('_fallback', function ($name) {
+        I18n::config(TranslatorRegistry::FALLBACK_LOADER, function (string $name, string $locale) {
             $package = new Package('default');
 
-            if ($name == 'custom') {
+            if ($name === 'custom') {
                 $package->setMessages([
                     'Cow' => 'Le Moo custom',
                 ]);
@@ -768,10 +767,10 @@ class I18nTest extends TestCase
         });
 
         $translator = I18n::getTranslator('custom');
-        $this->assertEquals('Le Moo custom', $translator->translate('Cow'));
+        $this->assertSame('Le Moo custom', $translator->translate('Cow'));
 
         $translator = I18n::getTranslator();
-        $this->assertEquals('Le Moo default', $translator->translate('Cow'));
+        $this->assertSame('Le Moo default', $translator->translate('Cow'));
     }
 
     /**
@@ -784,7 +783,7 @@ class I18nTest extends TestCase
         I18n::setTranslator('default', function () {
             $package = new Package('default');
             $package->setMessages([
-                'Dog' => 'Le bark'
+                'Dog' => 'Le bark',
             ]);
 
             return $package;
@@ -793,15 +792,15 @@ class I18nTest extends TestCase
         I18n::setTranslator('custom', function () {
             $package = new Package('default');
             $package->setMessages([
-                'Cow' => 'Le moo'
+                'Cow' => 'Le moo',
             ]);
 
             return $package;
         }, 'fr_FR');
 
         $translator = I18n::getTranslator('custom', 'fr_FR');
-        $this->assertEquals('Le moo', $translator->translate('Cow'));
-        $this->assertEquals('Le bark', $translator->translate('Dog'));
+        $this->assertSame('Le moo', $translator->translate('Cow'));
+        $this->assertSame('Le bark', $translator->translate('Dog'));
     }
 
     /**
@@ -828,8 +827,8 @@ class I18nTest extends TestCase
         }, 'fr_FR');
 
         $translator = I18n::getTranslator('custom', 'fr_FR');
-        $this->assertEquals('Le moo', $translator->translate('Cow'));
-        $this->assertEquals('Dog', $translator->translate('Dog'));
+        $this->assertSame('Le moo', $translator->translate('Cow'));
+        $this->assertSame('Dog', $translator->translate('Dog'));
     }
 
     /**
@@ -843,13 +842,13 @@ class I18nTest extends TestCase
         I18n::setTranslator('default', function () {
             $package = new Package('default');
             $package->setMessages([
-                'Dog' => 'Le bark'
+                'Dog' => 'Le bark',
             ]);
 
             return $package;
         }, 'fr_FR');
         I18n::config('custom', function ($name, $locale) {
-            $this->assertEquals('custom', $name);
+            $this->assertSame('custom', $name);
             $package = new Package('default');
             $package->setMessages([
                 'Cow' => 'Le moo',
@@ -859,8 +858,8 @@ class I18nTest extends TestCase
         });
 
         $translator = I18n::getTranslator('custom', 'fr_FR');
-        $this->assertEquals('Le moo', $translator->translate('Cow'));
-        $this->assertEquals('Le bark', $translator->translate('Dog'));
+        $this->assertSame('Le moo', $translator->translate('Cow'));
+        $this->assertSame('Le bark', $translator->translate('Dog'));
     }
 
     /**
@@ -872,7 +871,7 @@ class I18nTest extends TestCase
     {
         I18n::setDefaultFormatter('sprintf');
         $result = __('No translation needed');
-        $this->assertEquals('No translation needed', $result);
+        $this->assertSame('No translation needed', $result);
     }
 
     /**
@@ -883,8 +882,8 @@ class I18nTest extends TestCase
     public function testPluralTranslationsFromDomain()
     {
         I18n::setLocale('de');
-        $this->assertEquals('Standorte', __dn('wa', 'Location', 'Locations', 0));
-        $this->assertEquals('Standort', __dn('wa', 'Location', 'Locations', 1));
-        $this->assertEquals('Standorte', __dn('wa', 'Location', 'Locations', 2));
+        $this->assertSame('Standorte', __dn('wa', 'Location', 'Locations', 0));
+        $this->assertSame('Standort', __dn('wa', 'Location', 'Locations', 1));
+        $this->assertSame('Standorte', __dn('wa', 'Location', 'Locations', 2));
     }
 }

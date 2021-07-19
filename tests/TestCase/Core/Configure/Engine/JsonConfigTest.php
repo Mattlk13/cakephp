@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -15,7 +17,6 @@
 namespace Cake\Test\TestCase\Core\Configure\Engine;
 
 use Cake\Core\Configure\Engine\JsonConfig;
-use Cake\Core\Plugin;
 use Cake\TestSuite\TestCase;
 
 /**
@@ -23,24 +24,28 @@ use Cake\TestSuite\TestCase;
  */
 class JsonConfigTest extends TestCase
 {
+    /**
+     * @var string
+     */
+    protected $path;
 
     /**
      * Test data to serialize and unserialize.
      *
      * @var array
      */
-    public $testData = [
+    protected $testData = [
         'One' => [
             'two' => 'value',
             'three' => [
-                'four' => 'value four'
+                'four' => 'value four',
             ],
             'is_null' => null,
             'bool_false' => false,
             'bool_true' => true,
         ],
         'Asset' => [
-            'timestamp' => 'force'
+            'timestamp' => 'force',
         ],
     ];
 
@@ -49,7 +54,7 @@ class JsonConfigTest extends TestCase
      *
      * @return void
      */
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
         $this->path = CONFIG;
@@ -64,8 +69,8 @@ class JsonConfigTest extends TestCase
     {
         $engine = new JsonConfig($this->path);
         $values = $engine->read('json_test');
-        $this->assertEquals('value', $values['Json']);
-        $this->assertEquals('buried', $values['Deep']['Deeper']['Deepest']);
+        $this->assertSame('value', $values['Json']);
+        $this->assertSame('buried', $values['Deep']['Deeper']['Deepest']);
     }
 
     /**
@@ -75,7 +80,7 @@ class JsonConfigTest extends TestCase
      */
     public function testReadWithExistentFileWithoutExtension()
     {
-        $this->expectException(\Cake\Core\Exception\Exception::class);
+        $this->expectException(\Cake\Core\Exception\CakeException::class);
         $engine = new JsonConfig($this->path);
         $engine->read('no_json_extension');
     }
@@ -87,7 +92,7 @@ class JsonConfigTest extends TestCase
      */
     public function testReadWithNonExistentFile()
     {
-        $this->expectException(\Cake\Core\Exception\Exception::class);
+        $this->expectException(\Cake\Core\Exception\CakeException::class);
         $engine = new JsonConfig($this->path);
         $engine->read('fake_values');
     }
@@ -99,7 +104,7 @@ class JsonConfigTest extends TestCase
      */
     public function testReadEmptyFile()
     {
-        $this->expectException(\Cake\Core\Exception\Exception::class);
+        $this->expectException(\Cake\Core\Exception\CakeException::class);
         $this->expectExceptionMessage('config file "empty.json"');
         $engine = new JsonConfig($this->path);
         $config = $engine->read('empty');
@@ -112,7 +117,7 @@ class JsonConfigTest extends TestCase
      */
     public function testReadWithInvalidJson()
     {
-        $this->expectException(\Cake\Core\Exception\Exception::class);
+        $this->expectException(\Cake\Core\Exception\CakeException::class);
         $this->expectExceptionMessage('Error parsing JSON string fetched from config file "invalid.json"');
         $engine = new JsonConfig($this->path);
         $engine->read('invalid');
@@ -125,7 +130,7 @@ class JsonConfigTest extends TestCase
      */
     public function testReadWithDots()
     {
-        $this->expectException(\Cake\Core\Exception\Exception::class);
+        $this->expectException(\Cake\Core\Exception\CakeException::class);
         $engine = new JsonConfig($this->path);
         $engine->read('../empty');
     }
@@ -146,7 +151,7 @@ class JsonConfigTest extends TestCase
     }
 
     /**
-     * Test dumping data to json format.
+     * Test dumping data to JSON format.
      *
      * @return void
      */

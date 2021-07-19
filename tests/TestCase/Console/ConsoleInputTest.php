@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP :  Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -15,6 +17,7 @@
 namespace Cake\Test\TestCase\Console;
 
 use Cake\Console\ConsoleInput;
+use Cake\Console\Exception\ConsoleException;
 use Cake\TestSuite\TestCase;
 
 /**
@@ -23,11 +26,16 @@ use Cake\TestSuite\TestCase;
 class ConsoleInputTest extends TestCase
 {
     /**
+     * @var \Cake\Console\ConsoleInput
+     */
+    protected $in;
+
+    /**
      * setUp method
      *
      * @return void
      */
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
 
@@ -42,10 +50,17 @@ class ConsoleInputTest extends TestCase
     public function testDataAvailable()
     {
         $this->skipIf(
-            DS === '\\',
-            'Skip ConsoleInput tests on Windows as they fail on AppVeyor.'
+            (bool)env('GITHUB_ACTIONS'),
+            'Skip test for ConsoleInput::dataAvailable() on Github VM as stream_select() incorrectly return 1 even though no data is available on STDIN.'
         );
 
-        $this->assertFalse($this->in->dataAvailable());
+        try {
+            $this->assertFalse($this->in->dataAvailable());
+        } catch (ConsoleException $e) {
+            $this->markTestSkipped(
+                'stream_select raised an exception. ' .
+                'This can happen when FD_SETSIZE is too small.'
+            );
+        }
     }
 }

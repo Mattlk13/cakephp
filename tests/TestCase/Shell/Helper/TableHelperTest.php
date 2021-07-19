@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP :  Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -25,26 +27,26 @@ use Cake\TestSuite\TestCase;
 class TableHelperTest extends TestCase
 {
     /**
-     * @var \Cake\Console\ConsoleOutput
+     * @var \Cake\TestSuite\Stub\ConsoleOutput
      */
-    public $stub;
+    protected $stub;
 
     /**
      * @var \Cake\Console\ConsoleIo
      */
-    public $io;
+    protected $io;
 
     /**
      * @var \Cake\Shell\Helper\TableHelper
      */
-    public $helper;
+    protected $helper;
 
     /**
      * setUp method
      *
      * @return void
      */
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
 
@@ -223,6 +225,7 @@ class TableHelperTest extends TestCase
         ];
         $this->assertEquals($expected, $this->stub->messages());
     }
+
     /**
      * Test output with different header style
      *
@@ -378,5 +381,95 @@ class TableHelperTest extends TestCase
         $this->helper->setConfig(['header' => false]);
         $this->helper->output([]);
         $this->assertEquals([], $this->stub->messages());
+    }
+
+    /**
+     * Right-aligned text style test.
+     */
+    public function testTextRightStyle()
+    {
+        $data = [
+            ['Item', 'Price per piece (yen)'],
+            ['Apple', '<text-right><info>¥</info> 200</text-right>'],
+            ['Orange', '100'],
+        ];
+        $this->helper->output($data);
+        $expected = [
+            '+--------+-----------------------+',
+            '| <info>Item</info>   | <info>Price per piece (yen)</info> |',
+            '+--------+-----------------------+',
+            '| Apple  |                 <info>¥</info> 200 |',
+            '| Orange | 100                   |',
+            '+--------+-----------------------+',
+        ];
+        $this->assertEquals($expected, $this->stub->messages());
+    }
+
+    /**
+     * Right-aligned text style test.(If there is text rightside the text-right tag)
+     */
+    public function testTextRightsideTheTextRightTag()
+    {
+        $this->expectException(\UnexpectedValueException::class);
+        $data = [
+            ['Item', 'Price per piece (yen)'],
+            ['Apple', '<text-right>some</text-right>text'],
+        ];
+        $this->helper->output($data);
+    }
+
+    /**
+     * Right-aligned text style test.(If there is text leftside the text-right tag)
+     */
+    public function testTextLeftsideTheTextRightTag()
+    {
+        $this->expectException(\UnexpectedValueException::class);
+        $data = [
+            ['Item', 'Price per piece (yen)'],
+            ['Apple', 'text<text-right>some</text-right>'],
+        ];
+        $this->helper->output($data);
+    }
+
+    /**
+     * Table row column of type integer should be cast to string
+     */
+    public function testRowValueInteger()
+    {
+        $data = [
+            ['Item', 'Quantity'],
+            ['Cakes', 2],
+        ];
+        $this->helper->output($data);
+        $expected = [
+            '+-------+----------+',
+            '| <info>Item</info>  | <info>Quantity</info> |',
+            '+-------+----------+',
+            '| Cakes | 2        |',
+            '+-------+----------+',
+        ];
+
+        $this->assertEquals($expected, $this->stub->messages());
+    }
+
+    /**
+     * Table row column of type null should be cast to empty string
+     */
+    public function testRowValueNull()
+    {
+        $data = [
+            ['Item', 'Quantity'],
+            ['Cakes', null],
+        ];
+        $this->helper->output($data);
+        $expected = [
+            '+-------+----------+',
+            '| <info>Item</info>  | <info>Quantity</info> |',
+            '+-------+----------+',
+            '| Cakes |          |',
+            '+-------+----------+',
+        ];
+
+        $this->assertEquals($expected, $this->stub->messages());
     }
 }

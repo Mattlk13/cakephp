@@ -1,12 +1,11 @@
 # The following env variables need to be set:
 # - VERSION
-# - GITHUB_USER
-# - GITHUB_TOKEN (optional if you have two factor authentication in github)
+# - GITHUB_TOKEN personal access API token for github.
 
 # Use the version number to figure out if the release
 # is a pre-release
 PRERELEASE=$(shell echo $(VERSION) | grep -E 'dev|rc|alpha|beta' --quiet && echo 'true' || echo 'false')
-COMPONENTS= filesystem log utility cache datasource core collection event validation database i18n ORM form
+COMPONENTS=cache console core collection database datasource event filesystem form http i18n log ORM utility validation
 CURRENT_BRANCH=$(shell git branch | grep '*' | tr -d '* ')
 
 # Github settings
@@ -17,8 +16,6 @@ REMOTE=origin
 
 ifdef GITHUB_TOKEN
 	AUTH=-H 'Authorization: token $(GITHUB_TOKEN)'
-else
-	AUTH=-u $(GITHUB_USER) -p$(GITHUB_PASS)
 endif
 
 DASH_VERSION=$(shell echo $(VERSION) | sed -e s/\\./-/g)
@@ -38,7 +35,7 @@ help:
 	@echo "================"
 	@echo ""
 	@echo "release VERSION=x.y.z"
-	@echo "  Create a new release of CakePHP. Requires the VERSION and GITHUB_USER, or GITHUB_TOKEN parameter."
+	@echo "  Create a new release of CakePHP. Requires the VERSION and GITHUB_TOKEN parameter."
 	@echo "  Packages up a new app skeleton tarball and uploads it to github."
 	@echo ""
 	@echo "package"
@@ -125,7 +122,7 @@ dist/cakephp-$(DASH_VERSION).zip: build/app build/cakephp composer.phar
 	mkdir -p dist
 	@echo "Installing app dependencies with composer"
 	# Install deps with composer
-	cd build/app && php ../../composer.phar install
+	cd build/app && php ../../composer.phar install && ../../composer.phar run-script post-install-cmd --no-interaction
 	# Copy the current cakephp libs up so we don't have to wait
 	# for packagist to refresh.
 	rm -rf build/app/vendor/cakephp/cakephp
@@ -144,18 +141,11 @@ package: clean dist/cakephp-$(DASH_VERSION).zip
 # Tasks to publish zipballs to Github.
 .PHONY: publish release
 
-publish: guard-VERSION guard-GITHUB_USER dist/cakephp-$(DASH_VERSION).zip
+publish: guard-VERSION dist/cakephp-$(DASH_VERSION).zip
 	@echo "Creating draft release for $(VERSION). prerelease=$(PRERELEASE)"
-	curl $(AUTH) -XPOST $(API_HOST)/repos/$(OWNER)/cakephp/releases -d '{ \
-		"tag_name": "$(VERSION)", \
-		"name": "CakePHP $(VERSION) released", \
-		"draft": true, \
-		"prerelease": $(PRERELEASE) \
-	}' > release.json
+	curl $(AUTH) -XPOST $(API_HOST)/repos/$(OWNER)/cakephp/releases -d '{"tag_name": "$(VERSION)", "name": "CakePHP $(VERSION) released", "draft": true, "prerelease": $(PRERELEASE)}' > release.json
 	# Extract id out of response json.
-	php -r '$$f = file_get_contents("./release.json"); \
-		$$d = json_decode($$f, true); \
-		file_put_contents("./id.txt", $$d["id"]);'
+	php -r '$$f = file_get_contents("./release.json"); $$d = json_decode($$f, true); file_put_contents("./id.txt", $$d["id"]);'
 	@echo "Uploading zip file to github."
 	curl $(AUTH) -XPOST \
 		$(UPLOAD_HOST)/repos/$(OWNER)/cakephp/releases/`cat ./id.txt`/assets?name=cakephp-$(DASH_VERSION).zip \
@@ -180,13 +170,10 @@ component-%:
 	git push -f $* $*:$(CURRENT_BRANCH)
 	git checkout $(CURRENT_BRANCH) > /dev/null
 
-tag-component-%: component-% guard-VERSION guard-GITHUB_USER
+tag-component-%: component-% guard-VERSION guard-GITHUB_TOKEN
 	@echo "Creating tag for the $* component"
 	git checkout $*
-	curl $(AUTH) -XPOST $(API_HOST)/repos/$(OWNER)/$*/git/refs -d '{ \
-		"ref": "refs\/tags\/$(VERSION)", \
-		"sha": "$(shell git rev-parse $*)" \
-	}'
+	curl $(AUTH) -XPOST $(API_HOST)/repos/$(OWNER)/$*/git/refs -d '{"ref": "refs\/tags\/$(VERSION)", "sha": "$(shell git rev-parse $*)"}'
 	git checkout $(CURRENT_BRANCH) > /dev/null
 	git branch -D $*
 	git remote rm $*
@@ -199,4 +186,4 @@ clean-component-%:
 	- git push -f $* :$(CURRENT_BRANCH)
 
 # Top level alias for doing a release.
-release: guard-VERSION guard-GITHUB_USER tag-release components-tag package publish
+release: guard-VERSION tag-release components-tag package publish

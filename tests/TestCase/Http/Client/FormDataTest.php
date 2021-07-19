@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -21,7 +23,6 @@ use Cake\TestSuite\TestCase;
  */
 class FormDataTest extends TestCase
 {
-
     /**
      * Test getting the boundary.
      *
@@ -31,10 +32,10 @@ class FormDataTest extends TestCase
     {
         $data = new FormData();
         $result = $data->boundary();
-        $this->assertRegExp('/^[a-f0-9]{32}$/', $result);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{32}$/', $result);
 
         $result2 = $data->boundary();
-        $this->assertEquals($result, $result2);
+        $this->assertSame($result, $result2);
     }
 
     /**
@@ -67,7 +68,7 @@ class FormDataTest extends TestCase
         $boundary = $data->boundary();
         $result = (string)$data;
         $expected = 'test=value&empty=&int=1&float=2.3&password=%40secret';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -82,13 +83,13 @@ class FormDataTest extends TestCase
             'key' => 'value',
             'empty' => '',
             'int' => '1',
-            'float' => '2.3'
+            'float' => '2.3',
         ];
         $data->addMany($array);
         $this->assertCount(4, $data);
         $result = (string)$data;
         $expected = 'key=value&empty=&int=1&float=2.3';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -116,9 +117,8 @@ class FormDataTest extends TestCase
             'value',
             '--' . $boundary . '--',
             '',
-            '',
         ];
-        $this->assertEquals(implode("\r\n", $expected), (string)$data);
+        $this->assertSame(implode("\r\n", $expected), (string)$data);
     }
 
     /**
@@ -132,12 +132,12 @@ class FormDataTest extends TestCase
         $data->add('Article', [
             'title' => 'first post',
             'published' => 'Y',
-            'tags' => ['blog', 'cakephp']
+            'tags' => ['blog', 'cakephp'],
         ]);
         $result = (string)$data;
         $expected = 'Article%5Btitle%5D=first+post&Article%5Bpublished%5D=Y&' .
             'Article%5Btags%5D%5B0%5D=blog&Article%5Btags%5D%5B1%5D=cakephp';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
     }
 
     /**
@@ -163,9 +163,8 @@ class FormDataTest extends TestCase
             $contents,
             '--' . $boundary . '--',
             '',
-            ''
         ];
-        $this->assertEquals(implode("\r\n", $expected), $result);
+        $this->assertSame(implode("\r\n", $expected), $result);
     }
 
     /**
@@ -194,9 +193,8 @@ class FormDataTest extends TestCase
             $contents,
             '--' . $boundary . '--',
             '',
-            ''
         ];
-        $this->assertEquals(implode("\r\n", $expected), $result);
+        $this->assertSame(implode("\r\n", $expected), $result);
     }
 
     /**
@@ -210,14 +208,14 @@ class FormDataTest extends TestCase
         $data->add('key', 'value');
         $result = $data->contentType();
         $expected = 'application/x-www-form-urlencoded';
-        $this->assertEquals($expected, $result);
+        $this->assertSame($expected, $result);
 
         $file = CORE_PATH . 'VERSION.txt';
         $data = new FormData();
         $data->addFile('upload', fopen($file, 'r'));
         $boundary = $data->boundary();
         $result = $data->contentType();
-        $expected = 'multipart/form-data; boundary="' . $boundary . '"';
-        $this->assertEquals($expected, $result);
+        $expected = 'multipart/form-data; boundary=' . $boundary;
+        $this->assertSame($expected, $result);
     }
 }

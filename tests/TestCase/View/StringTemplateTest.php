@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -14,19 +16,22 @@
  */
 namespace Cake\Test\TestCase\View;
 
-use Cake\Core\Plugin;
 use Cake\TestSuite\TestCase;
 use Cake\View\StringTemplate;
 
 class StringTemplateTest extends TestCase
 {
+    /**
+     * @var \Cake\View\StringTemplate
+     */
+    protected $template;
 
     /**
      * setUp
      *
      * @return void
      */
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
         $this->template = new StringTemplate();
@@ -40,10 +45,10 @@ class StringTemplateTest extends TestCase
     public function testConstructorAdd()
     {
         $templates = [
-            'link' => '<a href="{{url}}">{{text}}</a>'
+            'link' => '<a href="{{url}}">{{text}}</a>',
         ];
         $template = new StringTemplate($templates);
-        $this->assertEquals($templates['link'], $template->get('link'));
+        $this->assertSame($templates['link'], $template->get('link'));
     }
 
     /**
@@ -54,7 +59,7 @@ class StringTemplateTest extends TestCase
     public function testAdd()
     {
         $templates = [
-            'link' => '<a href="{{url}}">{{text}}</a>'
+            'link' => '<a href="{{url}}">{{text}}</a>',
         ];
         $result = $this->template->add($templates);
         $this->assertSame(
@@ -63,7 +68,7 @@ class StringTemplateTest extends TestCase
             'The same instance should be returned'
         );
 
-        $this->assertEquals($templates['link'], $this->template->get('link'));
+        $this->assertSame($templates['link'], $this->template->get('link'));
     }
 
     /**
@@ -74,10 +79,10 @@ class StringTemplateTest extends TestCase
     public function testRemove()
     {
         $templates = [
-            'link' => '<a href="{{url}}">{{text}}</a>'
+            'link' => '<a href="{{url}}">{{text}}</a>',
         ];
         $this->template->add($templates);
-        $this->assertNull($this->template->remove('link'), 'No return');
+        $this->template->remove('link');
         $this->assertNull($this->template->get('link'), 'Template should be gone.');
     }
 
@@ -91,7 +96,7 @@ class StringTemplateTest extends TestCase
         $templates = [
             'link' => '<a href="{{url}}">{{text}}</a>',
             'text' => '{{text}}',
-            'custom' => '<custom {{standard}} v1="{{var1}}" v2="{{var2}}" />'
+            'custom' => '<custom {{standard}} v1="{{var1}}" v2="{{var2}}" />',
         ];
         $this->template->add($templates);
 
@@ -103,15 +108,15 @@ class StringTemplateTest extends TestCase
 
         $result = $this->template->format('link', [
             'url' => '/',
-            'text' => 'example'
+            'text' => 'example',
         ]);
-        $this->assertEquals('<a href="/">example</a>', $result);
+        $this->assertSame('<a href="/">example</a>', $result);
 
         $result = $this->template->format('custom', [
             'standard' => 'default',
-            'templateVars' => ['var1' => 'foo']
+            'templateVars' => ['var1' => 'foo'],
         ]);
-        $this->assertEquals('<custom default v1="foo" v2="" />', $result);
+        $this->assertSame('<custom default v1="foo" v2="" />', $result);
     }
 
     /**
@@ -138,21 +143,21 @@ class StringTemplateTest extends TestCase
     public function testFormatArrayData()
     {
         $templates = [
-            'link' => '<a href="{{url}}">{{text}}</a>'
+            'link' => '<a href="{{url}}">{{text}}</a>',
         ];
         $this->template->add($templates);
 
         $result = $this->template->format('link', [
             'url' => '/',
-            'text' => ['example', 'text']
+            'text' => ['example', 'text'],
         ]);
-        $this->assertEquals('<a href="/">exampletext</a>', $result);
+        $this->assertSame('<a href="/">exampletext</a>', $result);
 
         $result = $this->template->format('link', [
             'url' => '/',
-            'text' => ['key' => 'example', 'text']
+            'text' => ['key' => 'example', 'text'],
         ]);
-        $this->assertEquals('<a href="/">exampletext</a>', $result);
+        $this->assertSame('<a href="/">exampletext</a>', $result);
     }
 
     /**
@@ -181,8 +186,8 @@ class StringTemplateTest extends TestCase
         $this->template->remove('attribute');
         $this->template->remove('compactAttribute');
         $this->assertEquals([], $this->template->get());
-        $this->assertNull($this->template->load('test_templates'));
-        $this->assertEquals('<a href="{{url}}">{{text}}</a>', $this->template->get('link'));
+        $this->template->load('test_templates');
+        $this->assertSame('<a href="{{url}}">{{text}}</a>', $this->template->get('link'));
     }
 
     /**
@@ -193,18 +198,17 @@ class StringTemplateTest extends TestCase
     public function testLoadPlugin()
     {
         $this->loadPlugins(['TestPlugin']);
-        $this->assertNull($this->template->load('TestPlugin.test_templates'));
-        $this->assertEquals('<em>{{text}}</em>', $this->template->get('italic'));
+        $this->template->load('TestPlugin.test_templates');
+        $this->assertSame('<em>{{text}}</em>', $this->template->get('italic'));
         $this->clearPlugins();
     }
 
     /**
-     * Test that loading non-existing templates causes errors.
-     *
+     * Test that loading nonexistent templates causes errors.
      */
     public function testLoadErrorNoFile()
     {
-        $this->expectException(\Cake\Core\Exception\Exception::class);
+        $this->expectException(\Cake\Core\Exception\CakeException::class);
         $this->expectExceptionMessage('Could not load configuration file');
         $this->template->load('no_such_file');
     }
@@ -218,14 +222,14 @@ class StringTemplateTest extends TestCase
     {
         $attrs = ['disabled' => true, 'selected' => 1, 'checked' => '1', 'multiple' => 'multiple'];
         $result = $this->template->formatAttributes($attrs);
-        $this->assertEquals(
+        $this->assertSame(
             ' disabled="disabled" selected="selected" checked="checked" multiple="multiple"',
             $result
         );
 
         $attrs = ['disabled' => false, 'selected' => 0, 'checked' => '0', 'multiple' => null];
         $result = $this->template->formatAttributes($attrs);
-        $this->assertEquals(
+        $this->assertSame(
             '',
             $result
         );
@@ -240,37 +244,37 @@ class StringTemplateTest extends TestCase
     {
         $attrs = ['name' => 'bruce', 'data-hero' => '<batman>', 'spellcheck' => 'true'];
         $result = $this->template->formatAttributes($attrs);
-        $this->assertEquals(
+        $this->assertSame(
             ' name="bruce" data-hero="&lt;batman&gt;" spellcheck="true"',
             $result
         );
 
         $attrs = ['escape' => false, 'name' => 'bruce', 'data-hero' => '<batman>'];
         $result = $this->template->formatAttributes($attrs);
-        $this->assertEquals(
+        $this->assertSame(
             ' name="bruce" data-hero="<batman>"',
             $result
         );
 
         $attrs = ['name' => 'bruce', 'data-hero' => '<batman>'];
         $result = $this->template->formatAttributes($attrs, ['name']);
-        $this->assertEquals(
+        $this->assertSame(
             ' data-hero="&lt;batman&gt;"',
             $result
         );
 
         $attrs = ['name' => 'bruce', 'data-hero' => '<batman>', 'templateVars' => ['foo' => 'bar']];
         $result = $this->template->formatAttributes($attrs, ['name']);
-        $this->assertEquals(
+        $this->assertSame(
             ' data-hero="&lt;batman&gt;"',
             $result
         );
 
-        $evilKey = "><script>alert(1)</script>";
+        $evilKey = '><script>alert(1)</script>';
         $attrs = [$evilKey => 'some value'];
 
         $result = $this->template->formatAttributes($attrs);
-        $this->assertEquals(
+        $this->assertSame(
             ' &gt;&lt;script&gt;alert(1)&lt;/script&gt;="some value"',
             $result
         );
@@ -285,7 +289,7 @@ class StringTemplateTest extends TestCase
     {
         $attrs = ['name' => ['bruce', 'wayne']];
         $result = $this->template->formatAttributes($attrs);
-        $this->assertEquals(
+        $this->assertSame(
             ' name="bruce wayne"',
             $result
         );
@@ -299,16 +303,16 @@ class StringTemplateTest extends TestCase
     public function testPushPopTemplates()
     {
         $this->template->add(['name' => '{{name}} is my name']);
-        $this->assertNull($this->template->push());
+        $this->template->push();
 
         $this->template->add(['name' => 'my name']);
-        $this->assertEquals('my name', $this->template->get('name'));
+        $this->assertSame('my name', $this->template->get('name'));
 
-        $this->assertNull($this->template->pop());
-        $this->assertEquals('{{name}} is my name', $this->template->get('name'));
+        $this->template->pop();
+        $this->assertSame('{{name}} is my name', $this->template->get('name'));
 
-        $this->assertNull($this->template->pop());
-        $this->assertNull($this->template->pop());
+        $this->template->pop();
+        $this->template->pop();
     }
 
     /**
@@ -357,7 +361,7 @@ class StringTemplateTest extends TestCase
         $result = $this->template->addClass(false, 'new_class');
         $this->assertEquals($result, ['class' => ['new_class']]);
 
-        $result = $this->template->addClass(new \StdClass(), 'new_class');
+        $result = $this->template->addClass(new \stdClass(), 'new_class');
         $this->assertEquals($result, ['class' => ['new_class']]);
     }
 
@@ -396,7 +400,7 @@ class StringTemplateTest extends TestCase
             [
                 'class' => 'current_class',
                 'other_index1' => false,
-                'type' => 'text'
+                'type' => 'text',
             ],
             'new_class',
             'class'
@@ -404,14 +408,14 @@ class StringTemplateTest extends TestCase
         $this->assertEquals($result, [
             'class' => ['current_class', 'new_class'],
             'other_index1' => false,
-            'type' => 'text'
+            'type' => 'text',
         ]);
 
         $result = $this->template->addClass(
             [
                 'my_class' => 'current_class',
                 'other_index1' => false,
-                'type' => 'text'
+                'type' => 'text',
             ],
             'new_class',
             'my_class'
@@ -419,25 +423,25 @@ class StringTemplateTest extends TestCase
         $this->assertEquals($result, [
             'other_index1' => false,
             'type' => 'text',
-            'my_class' => ['current_class', 'new_class']
+            'my_class' => ['current_class', 'new_class'],
         ]);
 
         $result = $this->template->addClass(
             [
                 'class' => [
                     'current_class',
-                    'text'
-                ]
+                    'text',
+                ],
             ],
             'new_class',
-            'non-existent'
+            'nonexistent'
         );
         $this->assertEquals($result, [
             'class' => [
                 'current_class',
-                'text'
+                'text',
             ],
-            'non-existent' => ['new_class']
+            'nonexistent' => ['new_class'],
         ]);
     }
 }

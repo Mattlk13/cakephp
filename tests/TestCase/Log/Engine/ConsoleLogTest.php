@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -22,7 +24,6 @@ use Cake\TestSuite\TestCase;
  */
 class ConsoleLogTest extends TestCase
 {
-
     /**
      * Test writing to ConsoleOutput
      */
@@ -31,12 +32,12 @@ class ConsoleLogTest extends TestCase
         $output = $this->getMockBuilder('Cake\Console\ConsoleOutput')->getMock();
 
         $message = ' Error: oh noes</error>';
-        $output->expects($this->at(0))
+        $output->expects($this->once())
             ->method('write')
             ->with($this->stringContains($message));
 
         $log = new ConsoleLog([
-            'stream' => $output
+            'stream' => $output,
         ]);
         $log->log('error', 'oh noes');
     }
@@ -50,12 +51,13 @@ class ConsoleLogTest extends TestCase
     {
         $filename = tempnam(sys_get_temp_dir(), 'cake_log_test');
         $log = new ConsoleLog([
-            'stream' => $filename
+            'stream' => $filename,
         ]);
         $log->log('error', 'oh noes');
         $fh = fopen($filename, 'r');
         $line = fgets($fh);
-        $this->assertContains('Error: oh noes', $line);
+        $this->assertStringContainsString('Error: oh noes', $line);
+        $this->assertMatchesRegularExpression('/2[0-9]{3}-[0-9]+-[0-9]+ [0-9]+:[0-9]+:[0-9]+ Error: oh noes/', $line);
     }
 
     /**
@@ -65,7 +67,7 @@ class ConsoleLogTest extends TestCase
     {
         $output = $this->getMockBuilder(ConsoleOutput::class)->getMock();
 
-        $output->expects($this->at(0))
+        $output->expects($this->once())
             ->method('setOutputAs')
             ->with(ConsoleOutput::RAW);
 
@@ -73,6 +75,24 @@ class ConsoleLogTest extends TestCase
             'stream' => $output,
             'outputAs' => ConsoleOutput::RAW,
         ]);
-        $this->assertEquals(ConsoleOutput::RAW, $log->getConfig('outputAs'));
+        $this->assertSame(ConsoleOutput::RAW, $log->getConfig('outputAs'));
+    }
+
+    /**
+     * test dateFormat option
+     *
+     * @return void
+     */
+    public function testDateFormat()
+    {
+        $filename = tempnam(sys_get_temp_dir(), 'cake_log_test');
+        $log = new ConsoleLog([
+            'stream' => $filename,
+            'dateFormat' => 'c',
+        ]);
+        $log->log('error', 'oh noes');
+        $fh = fopen($filename, 'r');
+        $line = fgets($fh);
+        $this->assertMatchesRegularExpression('/2[0-9]{3}-[0-9]+-[0-9]+T[0-9]+:[0-9]+:[0-9]+\+\d{2}:\d{2} Error: oh noes/', $line);
     }
 }

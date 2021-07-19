@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP :  Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -14,7 +16,6 @@
 namespace Cake\TestSuite\Stub;
 
 use Cake\Console\ConsoleInput as ConsoleInputBase;
-use Cake\Console\Exception\ConsoleException;
 use NumberFormatter;
 
 /**
@@ -28,7 +29,7 @@ class ConsoleInput extends ConsoleInputBase
     /**
      * Reply values for ask() and askChoice()
      *
-     * @var array
+     * @var string[]
      */
     protected $replies = [];
 
@@ -54,9 +55,9 @@ class ConsoleInput extends ConsoleInputBase
     /**
      * Read a reply
      *
-     * @return mixed The value of the reply
+     * @return string The value of the reply
      */
-    public function read()
+    public function read(): string
     {
         $this->currentIndex += 1;
 
@@ -67,8 +68,8 @@ class ConsoleInput extends ConsoleInputBase
 
             $replies = implode(', ', $this->replies);
             $message = "There are no more input replies available. This is the {$nth} read operation, " .
-                "only {$total} replies were set. The provided replies are: {$replies}";
-            throw new ConsoleException($message);
+                "only {$total} replies were set.\nThe provided replies are: {$replies}";
+            throw new MissingConsoleInputException($message);
         }
 
         return $this->replies[$this->currentIndex];
@@ -80,7 +81,7 @@ class ConsoleInput extends ConsoleInputBase
      * @param int $timeout An optional time to wait for data
      * @return bool True for data available, false otherwise
      */
-    public function dataAvailable($timeout = 0)
+    public function dataAvailable($timeout = 0): bool
     {
         return true;
     }

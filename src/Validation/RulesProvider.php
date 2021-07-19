@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -19,10 +21,11 @@ use ReflectionClass;
 /**
  * A Proxy class used to remove any extra arguments when the user intended to call
  * a method in another class that is not aware of validation providers signature
+ *
+ * @method bool extension(mixed $check, array $extensions, array $context = [])
  */
 class RulesProvider
 {
-
     /**
      * The class/object to proxy.
      *
@@ -42,6 +45,7 @@ class RulesProvider
      *
      * @param string|object $class the default class to proxy
      * @throws \ReflectionException
+     * @psalm-param class-string|object $class
      */
     public function __construct($class = Validation::class)
     {
@@ -59,9 +63,9 @@ class RulesProvider
      *
      * @param string $method the validation method to call
      * @param array $arguments the list of arguments to pass to the method
-     * @return bool whether or not the validation rule passed
+     * @return bool Whether or not the validation rule passed
      */
-    public function __call($method, $arguments)
+    public function __call(string $method, array $arguments)
     {
         $method = $this->_reflection->getMethod($method);
         $argumentList = $method->getParameters();

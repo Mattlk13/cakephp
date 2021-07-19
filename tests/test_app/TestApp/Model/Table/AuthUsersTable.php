@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -12,7 +14,7 @@
  */
 namespace TestApp\Model\Table;
 
-use Cake\Core\Exception\Exception;
+use Cake\Core\Exception\CakeException;
 use Cake\ORM\Query;
 use Cake\ORM\Table;
 
@@ -21,7 +23,6 @@ use Cake\ORM\Table;
  */
 class AuthUsersTable extends Table
 {
-
     /**
      * Custom finder
      *
@@ -49,7 +50,7 @@ class AuthUsersTable extends Table
     public function findUsername(Query $query, array $options)
     {
         if (empty($options['username'])) {
-            throw new Exception(__('Username not defined'));
+            throw new CakeException(__('Username not defined'));
         }
 
         $query = $this->find()

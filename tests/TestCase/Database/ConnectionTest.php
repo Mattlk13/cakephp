@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -14,15 +16,18 @@
  */
 namespace Cake\Test\TestCase\Database;
 
+use Cake\Cache\Engine\NullEngine;
 use Cake\Collection\Collection;
+use Cake\Core\App;
 use Cake\Database\Connection;
+use Cake\Database\Driver;
 use Cake\Database\Driver\Mysql;
 use Cake\Database\Exception\MissingConnectionException;
 use Cake\Database\Exception\NestedTransactionRollbackException;
 use Cake\Database\Log\LoggingStatement;
 use Cake\Database\Log\QueryLogger;
+use Cake\Database\Schema\CachedCollection;
 use Cake\Database\StatementInterface;
-use Cake\Database\Statement\BufferedStatement;
 use Cake\Datasource\ConnectionManager;
 use Cake\Log\Log;
 use Cake\TestSuite\TestCase;
@@ -35,8 +40,10 @@ use ReflectionProperty;
  */
 class ConnectionTest extends TestCase
 {
-
-    public $fixtures = ['core.Things'];
+    /**
+     * @var array
+     */
+    protected $fixtures = ['core.Things'];
 
     /**
      * Where the NestedTransactionRollbackException was created.
@@ -52,18 +59,46 @@ class ConnectionTest extends TestCase
      */
     protected $nestedTransactionStates = [];
 
-    public function setUp()
+    /**
+     * @var bool
+     */
+    protected $logState;
+
+    /**
+     * @var \Cake\Datasource\ConnectionInterface
+     */
+    protected $connection;
+
+    /**
+     * @var use Cake\Database\Log\QueryLogger
+     */
+    protected $defaultLogger;
+
+    /**
+     * @return void
+     */
+    public function setUp(): void
     {
         parent::setUp();
         $this->connection = ConnectionManager::get('test');
+        $this->defaultLogger = $this->connection->getLogger();
+
+        $this->logState = $this->connection->isQueryLoggingEnabled();
+        $this->connection->disableQueryLogging();
+
         static::setAppNamespace();
     }
 
-    public function tearDown()
+    /**
+     * @return void
+     */
+    public function tearDown(): void
     {
-        Log::reset();
         $this->connection->disableSavePoints();
-        $this->connection->setLogger(null);
+        $this->connection->setLogger($this->defaultLogger);
+        $this->connection->enableQueryLogging($this->logState);
+
+        Log::reset();
         unset($this->connection);
         parent::tearDown();
     }
@@ -72,11 +107,11 @@ class ConnectionTest extends TestCase
      * Auxiliary method to build a mock for a driver so it can be injected into
      * the connection object
      *
-     * @return \Cake\Database\Driver|\PHPUnit_Framework_MockObject_MockObject
+     * @return \Cake\Database\Driver|\PHPUnit\Framework\MockObject\MockObject
      */
     public function getMockFormDriver()
     {
-        $driver = $this->getMockBuilder('Cake\Database\Driver')->getMock();
+        $driver = $this->getMockBuilder(Driver::class)->getMock();
         $driver->expects($this->once())
             ->method('enabled')
             ->will($this->returnValue(true));
@@ -141,7 +176,7 @@ class ConnectionTest extends TestCase
         $this->expectException(\Cake\Database\Exception\MissingExtensionException::class);
         $this->expectExceptionMessage('Database driver DriverMock cannot be used due to a missing PHP extension or unmet dependency');
         $mock = $this->getMockBuilder(Mysql::class)
-            ->setMethods(['enabled'])
+            ->onlyMethods(['enabled'])
             ->setMockClassName('DriverMock')
             ->getMock();
         $connection = new Connection(['driver' => $mock]);
@@ -155,12 +190,12 @@ class ConnectionTest extends TestCase
     public function testDriverOptionClassNameSupport()
     {
         $connection = new Connection(['driver' => 'TestDriver']);
-        $this->assertInstanceOf('\TestApp\Database\Driver\TestDriver', $connection->getDriver());
+        $this->assertInstanceOf('TestApp\Database\Driver\TestDriver', $connection->getDriver());
 
         $connection = new Connection(['driver' => 'TestPlugin.TestDriver']);
-        $this->assertInstanceOf('\TestPlugin\Database\Driver\TestDriver', $connection->getDriver());
+        $this->assertInstanceOf('TestPlugin\Database\Driver\TestDriver', $connection->getDriver());
 
-        list(, $name) = namespaceSplit(get_class($this->connection->getDriver()));
+        [, $name] = namespaceSplit(get_class($this->connection->getDriver()));
         $connection = new Connection(['driver' => $name]);
         $this->assertInstanceOf(get_class($this->connection->getDriver()), $connection->getDriver());
     }
@@ -183,8 +218,29 @@ class ConnectionTest extends TestCase
         }
 
         $this->assertNotNull($e);
-        $this->assertStringStartsWith('Connection to database could not be established:', $e->getMessage());
+        $this->assertStringStartsWith(
+            sprintf(
+                'Connection to %s could not be established:',
+                App::shortName(get_class($connection->getDriver()), 'Database/Driver')
+            ),
+            $e->getMessage()
+        );
         $this->assertInstanceOf('PDOException', $e->getPrevious());
+    }
+
+    public function testConnectRetry()
+    {
+        $this->skipIf(!ConnectionManager::get('test')->getDriver() instanceof \Cake\Database\Driver\Sqlserver);
+
+        $connection = new Connection(['driver' => 'RetryDriver']);
+        $this->assertInstanceOf('TestApp\Database\Driver\RetryDriver', $connection->getDriver());
+
+        try {
+            $connection->connect();
+        } catch (MissingConnectionException $e) {
+        }
+
+        $this->assertSame(4, $connection->getDriver()->getConnectRetries());
     }
 
     /**
@@ -203,7 +259,7 @@ class ConnectionTest extends TestCase
         $result = $this->connection->prepare($query);
         $this->assertInstanceOf('Cake\Database\StatementInterface', $result);
         $sql = '#SELECT [`"\[]?1 \+ 1[`"\]]?#';
-        $this->assertRegExp($sql, $result->queryString);
+        $this->assertMatchesRegularExpression($sql, $result->queryString);
     }
 
     /**
@@ -260,19 +316,19 @@ class ConnectionTest extends TestCase
             !($this->connection->getDriver() instanceof \Cake\Database\Driver\Sqlite),
             'Only required for SQLite driver which does not support buffered results natively'
         );
-        $this->loadFixtures('Things');
+
         $statement = $this->connection->query('SELECT * FROM things LIMIT 3');
 
         $collection = new Collection($statement);
         $result = $collection->extract('id')->toArray();
-        $this->assertSame(['1', '2'], $result);
+        $this->assertEquals(['1', '2'], $result);
 
         // Check iteration after extraction
         $result = [];
         foreach ($collection as $v) {
             $result[] = $v['id'];
         }
-        $this->assertSame(['1', '2'], $result);
+        $this->assertEquals(['1', '2'], $result);
     }
 
     /**
@@ -365,18 +421,18 @@ class ConnectionTest extends TestCase
 
         $result = $this->connection->execute('SELECT title, body  FROM things');
         $row = $result->fetch('assoc');
-        $this->assertEquals('a title', $row['title']);
-        $this->assertEquals('a body', $row['body']);
+        $this->assertSame('a title', $row['title']);
+        $this->assertSame('a body', $row['body']);
 
         $row = $result->fetch('assoc');
         $result->closeCursor();
-        $this->assertEquals('another title', $row['title']);
-        $this->assertEquals('another body', $row['body']);
+        $this->assertSame('another title', $row['title']);
+        $this->assertSame('another body', $row['body']);
 
         $result->execute();
         $row = $result->fetch('assoc');
         $result->closeCursor();
-        $this->assertEquals('a title', $row['title']);
+        $this->assertSame('a title', $row['title']);
     }
 
     /**
@@ -387,10 +443,11 @@ class ConnectionTest extends TestCase
      */
     public function testStatementFetchObject()
     {
-        $result = $this->connection->execute('SELECT title, body  FROM things');
-        $row = $result->fetch(\PDO::FETCH_OBJ);
-        $this->assertEquals('a title', $row->title);
-        $this->assertEquals('a body', $row->body);
+        $statement = $this->connection->execute('SELECT title, body  FROM things');
+        $row = $statement->fetch(\PDO::FETCH_OBJ);
+        $this->assertSame('a title', $row->title);
+        $this->assertSame('a body', $row->body);
+        $statement->closeCursor();
     }
 
     /**
@@ -452,9 +509,9 @@ class ConnectionTest extends TestCase
         $result = $this->connection->execute('SELECT * FROM things WHERE title = :title AND body = :body', $values, ['body' => 'date']);
         $this->assertCount(2, $result);
         $row = $result->fetch('assoc');
-        $this->assertEquals('2012-01-01', $row['body']);
+        $this->assertSame('2012-01-01', $row['body']);
         $row = $result->fetch('assoc');
-        $this->assertEquals('2012-01-01', $row['body']);
+        $this->assertSame('2012-01-01', $row['body']);
         $result->closeCursor();
     }
 
@@ -472,7 +529,7 @@ class ConnectionTest extends TestCase
         $result = $this->connection->execute('SELECT * FROM things WHERE title = :title AND body = :body', $values, ['body' => 'date']);
         $this->assertCount(1, $result);
         $row = $result->fetch('assoc');
-        $this->assertEquals('2012-01-01', $row['body']);
+        $this->assertSame('2012-01-01', $row['body']);
         $result->closeCursor();
     }
 
@@ -491,6 +548,7 @@ class ConnectionTest extends TestCase
 
     /**
      * Tests delete from table with conditions
+     *
      * @return void
      */
     public function testDeleteWithConditions()
@@ -776,7 +834,7 @@ class ConnectionTest extends TestCase
     public function testQuoteIdentifier()
     {
         $driver = $this->getMockBuilder('Cake\Database\Driver\Sqlite')
-            ->setMethods(['enabled'])
+            ->onlyMethods(['enabled'])
             ->getMock();
         $driver->expects($this->once())
             ->method('enabled')
@@ -893,21 +951,6 @@ class ConnectionTest extends TestCase
     }
 
     /**
-     * Tests that a custom logger object can be set
-     *
-     * @group deprecated
-     * @return void
-     */
-    public function testSetLogger()
-    {
-        $this->deprecated(function () {
-            $logger = new QueryLogger;
-            $this->connection->logger($logger);
-            $this->assertSame($logger, $this->connection->logger());
-        });
-    }
-
-    /**
      * Tests setting and getting the logger object
      *
      * @return void
@@ -926,7 +969,7 @@ class ConnectionTest extends TestCase
      */
     public function testLoggerDecorator()
     {
-        $logger = new QueryLogger;
+        $logger = new QueryLogger();
         $this->connection->enableQueryLogging(true);
         $this->connection->setLogger($logger);
         $st = $this->connection->prepare('SELECT 1');
@@ -935,24 +978,7 @@ class ConnectionTest extends TestCase
 
         $this->connection->enableQueryLogging(false);
         $st = $this->connection->prepare('SELECT 1');
-        $this->assertNotInstanceOf('\Cake\Database\Log\LoggingStatement', $st);
-    }
-
-    /**
-     * test logQueries method
-     *
-     * @deprecated
-     * @return void
-     */
-    public function testLogQueries()
-    {
-        $this->deprecated(function () {
-            $this->connection->logQueries(true);
-            $this->assertTrue($this->connection->logQueries());
-
-            $this->connection->logQueries(false);
-            $this->assertFalse($this->connection->logQueries());
-        });
+        $this->assertNotInstanceOf('Cake\Database\Log\LoggingStatement', $st);
     }
 
     /**
@@ -976,14 +1002,46 @@ class ConnectionTest extends TestCase
      */
     public function testLogFunction()
     {
-        $logger = $this->getMockBuilder(QueryLogger::class)->getMock();
-        $this->connection->setLogger($logger);
-        $logger->expects($this->once())->method('log')
-            ->with($this->logicalAnd(
-                $this->isInstanceOf('\Cake\Database\Log\LoggedQuery'),
-                $this->attributeEqualTo('query', 'SELECT 1')
-            ));
+        Log::setConfig('queries', ['className' => 'Array']);
+        $this->connection->enableQueryLogging();
         $this->connection->log('SELECT 1');
+
+        $messages = Log::engine('queries')->read();
+        $this->assertCount(1, $messages);
+        $this->assertSame('debug connection=test duration=0 rows=0 SELECT 1', $messages[0]);
+    }
+
+    /**
+     * @see https://github.com/cakephp/cakephp/issues/14676
+     * @return void
+     */
+    public function testLoggerDecoratorDoesNotPrematurelyFetchRecords()
+    {
+        Log::setConfig('queries', ['className' => 'Array']);
+        $logger = new QueryLogger();
+        $this->connection->enableQueryLogging(true);
+        $this->connection->setLogger($logger);
+        $st = $this->connection->execute('SELECT * FROM things');
+        $this->assertInstanceOf(LoggingStatement::class, $st);
+
+        $messages = Log::engine('queries')->read();
+        $this->assertCount(0, $messages);
+
+        $expected = [
+            [1, 'a title', 'a body'],
+            [2, 'another title', 'another body'],
+        ];
+        $results = $st->fetchAll();
+        $this->assertEquals($expected, $results);
+
+        $messages = Log::engine('queries')->read();
+        $this->assertCount(1, $messages);
+
+        $st = $this->connection->execute('SELECT * FROM things WHERE id = 0');
+        $this->assertSame(0, $st->rowCount());
+
+        $messages = Log::engine('queries')->read();
+        $this->assertCount(2, $messages, 'Select queries without any matching rows should also be logged.');
     }
 
     /**
@@ -993,9 +1051,11 @@ class ConnectionTest extends TestCase
      */
     public function testLogBeginRollbackTransaction()
     {
+        Log::setConfig('queries', ['className' => 'Array']);
+
         $connection = $this
             ->getMockBuilder(Connection::class)
-            ->setMethods(['connect'])
+            ->onlyMethods(['connect'])
             ->disableOriginalConstructor()
             ->getMock();
         $connection->enableQueryLogging(true);
@@ -1003,22 +1063,14 @@ class ConnectionTest extends TestCase
         $driver = $this->getMockFormDriver();
         $connection->setDriver($driver);
 
-        $logger = $this->getMockBuilder(QueryLogger::class)->getMock();
-        $connection->setLogger($logger);
-        $logger->expects($this->at(0))->method('log')
-            ->with($this->logicalAnd(
-                $this->isInstanceOf('\Cake\Database\Log\LoggedQuery'),
-                $this->attributeEqualTo('query', 'BEGIN')
-            ));
-        $logger->expects($this->at(1))->method('log')
-            ->with($this->logicalAnd(
-                $this->isInstanceOf('\Cake\Database\Log\LoggedQuery'),
-                $this->attributeEqualTo('query', 'ROLLBACK')
-            ));
-
         $connection->begin();
         $connection->begin(); //This one will not be logged
         $connection->rollback();
+
+        $messages = Log::engine('queries')->read();
+        $this->assertCount(2, $messages);
+        $this->assertSame('debug connection= duration=0 rows=0 BEGIN', $messages[0]);
+        $this->assertSame('debug connection= duration=0 rows=0 ROLLBACK', $messages[1]);
     }
 
     /**
@@ -1030,21 +1082,31 @@ class ConnectionTest extends TestCase
     {
         $driver = $this->getMockFormDriver();
         $connection = $this->getMockBuilder(Connection::class)
-            ->setMethods(['connect'])
+            ->onlyMethods(['connect'])
             ->setConstructorArgs([['driver' => $driver]])
             ->getMock();
 
-        $logger = $this->getMockBuilder(QueryLogger::class)->getMock();
-        $connection->setLogger($logger);
-
-        $logger->expects($this->at(1))->method('log')
-            ->with($this->logicalAnd(
-                $this->isInstanceOf('\Cake\Database\Log\LoggedQuery'),
-                $this->attributeEqualTo('query', 'COMMIT')
-            ));
+        Log::setConfig('queries', ['className' => 'Array']);
         $connection->enableQueryLogging(true);
         $connection->begin();
         $connection->commit();
+
+        $messages = Log::engine('queries')->read();
+        $this->assertCount(2, $messages);
+        $this->assertSame('debug connection= duration=0 rows=0 BEGIN', $messages[0]);
+        $this->assertSame('debug connection= duration=0 rows=0 COMMIT', $messages[1]);
+    }
+
+    /**
+     * Tests setting and getting the cacher object
+     *
+     * @return void
+     */
+    public function testGetAndSetCacher()
+    {
+        $cacher = new NullEngine();
+        $this->connection->setCacher($cacher);
+        $this->assertSame($cacher, $this->connection->getCacher());
     }
 
     /**
@@ -1057,17 +1119,17 @@ class ConnectionTest extends TestCase
     {
         $driver = $this->getMockFormDriver();
         $connection = $this->getMockBuilder(Connection::class)
-            ->setMethods(['connect', 'commit', 'begin'])
+            ->onlyMethods(['connect', 'commit', 'begin'])
             ->setConstructorArgs([['driver' => $driver]])
             ->getMock();
-        $connection->expects($this->at(0))->method('begin');
-        $connection->expects($this->at(1))->method('commit');
+        $connection->expects($this->once())->method('begin');
+        $connection->expects($this->once())->method('commit');
         $result = $connection->transactional(function ($conn) use ($connection) {
             $this->assertSame($connection, $conn);
 
             return 'thing';
         });
-        $this->assertEquals('thing', $result);
+        $this->assertSame('thing', $result);
     }
 
     /**
@@ -1080,11 +1142,11 @@ class ConnectionTest extends TestCase
     {
         $driver = $this->getMockFormDriver();
         $connection = $this->getMockBuilder(Connection::class)
-            ->setMethods(['connect', 'commit', 'begin', 'rollback'])
+            ->onlyMethods(['connect', 'commit', 'begin', 'rollback'])
             ->setConstructorArgs([['driver' => $driver]])
             ->getMock();
-        $connection->expects($this->at(0))->method('begin');
-        $connection->expects($this->at(1))->method('rollback');
+        $connection->expects($this->once())->method('begin');
+        $connection->expects($this->once())->method('rollback');
         $connection->expects($this->never())->method('commit');
         $result = $connection->transactional(function ($conn) use ($connection) {
             $this->assertSame($connection, $conn);
@@ -1106,15 +1168,15 @@ class ConnectionTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $driver = $this->getMockFormDriver();
         $connection = $this->getMockBuilder(Connection::class)
-            ->setMethods(['connect', 'commit', 'begin', 'rollback'])
+            ->onlyMethods(['connect', 'commit', 'begin', 'rollback'])
             ->setConstructorArgs([['driver' => $driver]])
             ->getMock();
-        $connection->expects($this->at(0))->method('begin');
-        $connection->expects($this->at(1))->method('rollback');
+        $connection->expects($this->once())->method('begin');
+        $connection->expects($this->once())->method('rollback');
         $connection->expects($this->never())->method('commit');
         $connection->transactional(function ($conn) use ($connection) {
             $this->assertSame($connection, $conn);
-            throw new \InvalidArgumentException;
+            throw new \InvalidArgumentException();
         });
     }
 
@@ -1127,7 +1189,7 @@ class ConnectionTest extends TestCase
     {
         $driver = $this->getMockFormDriver();
         $connection = $this->getMockBuilder(Connection::class)
-            ->setMethods(['connect'])
+            ->onlyMethods(['connect'])
             ->setConstructorArgs([['driver' => $driver]])
             ->getMock();
 
@@ -1142,29 +1204,40 @@ class ConnectionTest extends TestCase
     }
 
     /**
-     * Tests it is possible to set a schema collection object
+     * Test CachedCollection creation with default and custom cache key prefix.
      *
-     * @group deprecated
      * @return void
      */
-    public function testSchemaCollection()
+    public function testGetCachedCollection()
     {
-        $this->deprecated(function () {
-            $driver = $this->getMockFormDriver();
-            $connection = $this->getMockBuilder(Connection::class)
-                ->setMethods(['connect'])
-                ->setConstructorArgs([['driver' => $driver]])
-                ->getMock();
+        $driver = $this->getMockFormDriver();
+        $connection = $this->getMockBuilder(Connection::class)
+            ->onlyMethods(['connect'])
+            ->setConstructorArgs([[
+                'driver' => $driver,
+                'name' => 'default',
+                'cacheMetadata' => true,
+            ]])
+            ->getMock();
 
-            $schema = $connection->schemaCollection();
-            $this->assertInstanceOf('Cake\Database\Schema\Collection', $schema);
+        $schema = $connection->getSchemaCollection();
+        $this->assertInstanceOf(CachedCollection::class, $schema);
+        $this->assertSame('default_key', $schema->cacheKey('key'));
 
-            $schema = $this->getMockBuilder('Cake\Database\Schema\Collection')
-                ->setConstructorArgs([$connection])
-                ->getMock();
-            $connection->schemaCollection($schema);
-            $this->assertSame($schema, $connection->schemaCollection());
-        });
+        $driver = $this->getMockFormDriver();
+        $connection = $this->getMockBuilder(Connection::class)
+            ->onlyMethods(['connect'])
+            ->setConstructorArgs([[
+                'driver' => $driver,
+                'name' => 'default',
+                'cacheMetadata' => true,
+                'cacheKeyPrefix' => 'foo',
+            ]])
+            ->getMock();
+
+        $schema = $connection->getSchemaCollection();
+        $this->assertInstanceOf(CachedCollection::class, $schema);
+        $this->assertSame('foo_key', $schema->cacheKey('key'));
     }
 
     /**
@@ -1317,18 +1390,15 @@ class ConnectionTest extends TestCase
         $prop = new ReflectionProperty($conn, '_driver');
         $prop->setAccessible(true);
         $oldDriver = $prop->getValue($conn);
-        $newDriver = $this->getMockBuilder('Cake\Database\Driver')->getMock();
+        $newDriver = $this->getMockBuilder(Driver::class)->getMock();
         $prop->setValue($conn, $newDriver);
 
-        $newDriver->expects($this->at(0))
+        $newDriver->expects($this->exactly(2))
             ->method('prepare')
-            ->will($this->throwException(new Exception('server gone away')));
-
-        $newDriver->expects($this->at(1))->method('disconnect');
-        $newDriver->expects($this->at(2))->method('connect');
-        $newDriver->expects($this->at(3))
-            ->method('prepare')
-            ->will($this->returnValue($statement));
+            ->will($this->onConsecutiveCalls(
+                $this->throwException(new Exception('server gone away')),
+                $this->returnValue($statement)
+            ));
 
         $res = $conn->query('SELECT 1');
         $this->assertInstanceOf(StatementInterface::class, $res);
@@ -1352,7 +1422,7 @@ class ConnectionTest extends TestCase
         $prop = new ReflectionProperty($conn, '_driver');
         $prop->setAccessible(true);
         $oldDriver = $prop->getValue($conn);
-        $newDriver = $this->getMockBuilder('Cake\Database\Driver')->getMock();
+        $newDriver = $this->getMockBuilder(Driver::class)->getMock();
         $prop->setValue($conn, $newDriver);
 
         $newDriver->expects($this->once())

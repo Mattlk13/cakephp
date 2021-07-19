@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
@@ -14,29 +16,41 @@
  */
 namespace Cake\Test\TestCase\ORM;
 
-use Cake\Core\Plugin;
-use Cake\Database\Exception;
+use Cake\Database\Exception\DatabaseException;
+use Cake\Database\Log\QueryLogger;
 use Cake\Datasource\ConnectionManager;
+use Cake\Log\Log;
 use Cake\ORM\Entity;
 use Cake\ORM\ResultSet;
 use Cake\ORM\Table;
 use Cake\TestSuite\TestCase;
-use TestApp\Model\Entity\Article;
 
 /**
  * ResultSet test case.
  */
 class ResultSetTest extends TestCase
 {
+    /**
+     * @var array
+     */
+    protected $fixtures = ['core.Articles', 'core.Authors', 'core.Comments'];
 
-    public $fixtures = ['core.Articles', 'core.Authors', 'core.Comments'];
+    /**
+     * @var \Cake\ORM\Table
+     */
+    protected $table;
+
+    /**
+     * @var array
+     */
+    protected $fixtureData;
 
     /**
      * setup
      *
      * @return void
      */
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
         $this->connection = ConnectionManager::get('test');
@@ -48,7 +62,7 @@ class ResultSetTest extends TestCase
         $this->fixtureData = [
             ['id' => 1, 'author_id' => 1, 'title' => 'First Article', 'body' => 'First Article Body', 'published' => 'Y'],
             ['id' => 2, 'author_id' => 3, 'title' => 'Second Article', 'body' => 'Second Article Body', 'published' => 'Y'],
-            ['id' => 3, 'author_id' => 1, 'title' => 'Third Article', 'body' => 'Third Article Body', 'published' => 'Y']
+            ['id' => 3, 'author_id' => 1, 'title' => 'Third Article', 'body' => 'Third Article Body', 'published' => 'Y'],
         ];
     }
 
@@ -84,7 +98,7 @@ class ResultSetTest extends TestCase
         foreach ($results as $result) {
             $first[] = $result;
         }
-        $this->expectException(Exception::class);
+        $this->expectException(DatabaseException::class);
         foreach ($results as $result) {
             $second[] = $result;
         }
@@ -140,7 +154,7 @@ class ResultSetTest extends TestCase
         // Use a loop to test Iterator implementation
         foreach ($results as $i => $row) {
             $expected = new Entity($this->fixtureData[$i]);
-            $expected->isNew(false);
+            $expected->setNew(false);
             $expected->setSource($this->table->getAlias());
             $expected->clean();
             $this->assertEquals($expected, $row, "Row $i does not match");
@@ -148,7 +162,7 @@ class ResultSetTest extends TestCase
     }
 
     /**
-     * Test converting resultsets into json
+     * Test converting resultsets into JSON
      *
      * @return void
      */
@@ -235,16 +249,16 @@ class ResultSetTest extends TestCase
         $options = [
             'markNew' => false,
             'markClean' => true,
-            'source' => $this->table->getAlias()
+            'source' => $this->table->getAlias(),
         ];
         $expected = [
             1 => [
                 new Entity($this->fixtureData[0], $options),
-                new Entity($this->fixtureData[2], $options)
+                new Entity($this->fixtureData[2], $options),
             ],
             3 => [
                 new Entity($this->fixtureData[1], $options),
-            ]
+            ],
         ];
         $this->assertEquals($expected, $results);
     }
@@ -259,7 +273,7 @@ class ResultSetTest extends TestCase
         $query = $this->table->find('all');
         $results = $query->all();
         $expected = [
-            'items' => $results->toArray()
+            'items' => $results->toArray(),
         ];
         $this->assertSame($expected, $results->__debugInfo());
     }
@@ -281,13 +295,13 @@ class ResultSetTest extends TestCase
             ->contain(['Articles'])
             ->enableHydration(false)
             ->first();
-        $this->assertEquals(1, $comment['id']);
+        $this->assertSame(1, $comment['id']);
         $this->assertNotEmpty($comment['comment']);
         $this->assertNull($comment['article']);
 
         $comment = $comments->get(1, ['contain' => ['Articles']]);
         $this->assertNull($comment->article);
-        $this->assertEquals(1, $comment->id);
+        $this->assertSame(1, $comment->id);
         $this->assertNotEmpty($comment->comment);
     }
 
@@ -309,7 +323,7 @@ class ResultSetTest extends TestCase
 
         $article = $articles->newEntity([
             'author_id' => $author->id,
-            'title' => 'article with author with null name'
+            'title' => 'article with author with null name',
         ]);
         $articles->save($article);
 
@@ -317,7 +331,7 @@ class ResultSetTest extends TestCase
             ->select(['Articles.id', 'Articles.title', 'Authors.name'])
             ->contain(['Authors'])
             ->where(['Articles.id' => $article->id])
-            ->enableAutoFields(false)
+            ->disableAutoFields()
             ->enableHydration(false)
             ->first();
 
@@ -339,7 +353,7 @@ class ResultSetTest extends TestCase
 
         $article = $this->table->get(1, ['contain' => ['Comments']]);
         $this->assertNull($article->comment);
-        $this->assertEquals(1, $article->id);
+        $this->assertSame(1, $article->id);
         $this->assertNotEmpty($article->title);
 
         $article = $this->table->find()->where(['articles.id' => 1])
@@ -347,7 +361,7 @@ class ResultSetTest extends TestCase
             ->enableHydration(false)
             ->first();
         $this->assertNull($article['comment']);
-        $this->assertEquals(1, $article['id']);
+        $this->assertSame(1, $article['id']);
         $this->assertNotEmpty($article['title']);
     }
 
@@ -361,7 +375,7 @@ class ResultSetTest extends TestCase
     {
         $comments = $this->getTableLocator()->get('Comments');
         $query = $comments->find()->select(['Other__field' => 'test']);
-        $query->enableAutoFields(false);
+        $query->disableAutoFields();
 
         $row = ['Other__field' => 'test'];
         $statement = $this->getMockBuilder('Cake\Database\StatementInterface')->getMock();
@@ -387,17 +401,17 @@ class ResultSetTest extends TestCase
         $comments = $this->getTableLocator()->get('TestPlugin.Comments');
         $comments->belongsTo('Authors', [
             'className' => 'TestPlugin.Authors',
-            'foreignKey' => 'user_id'
+            'foreignKey' => 'user_id',
         ]);
         $result = $comments->find()->contain(['Authors'])->first();
-        $this->assertEquals('TestPlugin.Comments', $result->getSource());
-        $this->assertEquals('TestPlugin.Authors', $result->author->getSource());
+        $this->assertSame('TestPlugin.Comments', $result->getSource());
+        $this->assertSame('TestPlugin.Authors', $result->author->getSource());
 
         $result = $comments->find()->matching('Authors', function ($q) {
             return $q->where(['Authors.id' => 1]);
         })->first();
-        $this->assertEquals('TestPlugin.Comments', $result->getSource());
-        $this->assertEquals('TestPlugin.Authors', $result->_matchingData['Authors']->getSource());
+        $this->assertSame('TestPlugin.Comments', $result->getSource());
+        $this->assertSame('TestPlugin.Authors', $result->_matchingData['Authors']->getSource());
         $this->clearPlugins();
     }
 
@@ -447,12 +461,44 @@ class ResultSetTest extends TestCase
     {
         $query = $this->table->find();
         $query->select([
-            'counter' => 'COUNT(*)'
+            'counter' => 'COUNT(*)',
         ])->group('author_id');
 
         $min = $query->min('counter');
         $max = $query->max('counter');
 
         $this->assertTrue($max > $min);
+    }
+
+    /**
+     * @see https://github.com/cakephp/cakephp/issues/14676
+     * @return void
+     */
+    public function testQueryLoggingForSelectsWithZeroRows()
+    {
+        Log::setConfig('queries', ['className' => 'Array']);
+
+        $defaultLogger = $this->connection->getLogger();
+        $queryLogging = $this->connection->isQueryLoggingEnabled();
+
+        $logger = new QueryLogger();
+        $this->connection->setLogger($logger)->enableQueryLogging(true);
+
+        $messages = Log::engine('queries')->read();
+        $this->assertCount(0, $messages);
+
+        $results = $this->table->find('all')
+            ->enableBufferedResults()
+            ->where(['id' => 0])
+            ->all();
+
+        $this->assertCount(0, $results);
+
+        $messages = Log::engine('queries')->read();
+        $message = array_pop($messages);
+        $this->assertStringContainsString('SELECT', $message);
+
+        $this->connection->setLogger($defaultLogger)->enableQueryLogging($queryLogging);
+        Log::reset();
     }
 }

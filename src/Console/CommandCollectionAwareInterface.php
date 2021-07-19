@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * CakePHP(tm) : Rapid Development Framework (http://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (http://cakefoundation.org)
@@ -17,7 +19,6 @@ namespace Cake\Console;
 /**
  * An interface for shells that take a CommandCollection
  * during initialization.
- *
  */
 interface CommandCollectionAwareInterface
 {
@@ -27,5 +28,5 @@ interface CommandCollectionAwareInterface
      * @param \Cake\Console\CommandCollection $commands The commands to use.
      * @return void
      */
-    public function setCommandCollection(CommandCollection $commands);
+    public function setCommandCollection(CommandCollection $commands): void;
 }
